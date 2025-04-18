@@ -22,9 +22,12 @@ type Props = {
 export default function BluetoothScreen({ navigation }: Props) {
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
   const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
 
   useEffect(() => {
-    requestPermissions();
+    requestPermissions().then(() => {
+      listDevices(); // Auto-load paired devices on permission grant
+    });
   }, []);
 
   const requestPermissions = async () => {
@@ -48,21 +51,31 @@ export default function BluetoothScreen({ navigation }: Props) {
 
   const connectToDevice = async (device: BluetoothDevice) => {
     try {
+      setConnectingId(device.id);
       const connected = await device.connect();
+      setConnectingId(null);
+
       if (connected) {
         setConnectedDevice(device);
-        navigation.navigate('Order', { device }); // ✅ Navigate to Order screen
+        navigation.navigate('Order', { device }); // Navigate to Order screen
       } else {
         console.warn('Failed to connect');
       }
     } catch (error) {
+      setConnectingId(null);
       console.error('Connection error:', error);
     }
   };
 
   const renderItem = ({ item }: { item: BluetoothDevice }) => (
-    <TouchableOpacity onPress={() => connectToDevice(item)} style={styles.deviceItem}>
-      <Text style={styles.deviceText}>{item.name || item.id}</Text>
+    <TouchableOpacity
+      onPress={() => connectToDevice(item)}
+      style={styles.deviceItem}
+      disabled={connectingId === item.id}
+    >
+      <Text style={styles.deviceText}>
+        {item.name || item.id} {connectingId === item.id ? '(Connecting...)' : ''}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -70,12 +83,16 @@ export default function BluetoothScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Select a Paired Bluetooth Printer</Text>
       <Button title="Refresh Paired Devices" onPress={listDevices} />
-      <FlatList
-        data={devices}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        style={styles.list}
-      />
+      {devices.length === 0 ? (
+        <Text style={styles.emptyText}>No paired Bluetooth devices found.</Text>
+      ) : (
+        <FlatList
+          data={devices}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          style={styles.list}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -84,6 +101,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   heading: { fontSize: 18, marginBottom: 12, fontWeight: 'bold' },
   list: { marginTop: 10 },
-  deviceItem: { padding: 15, backgroundColor: '#e0e0e0', borderRadius: 8, marginVertical: 5 },
+  deviceItem: {
+    padding: 15,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 8,
+    marginVertical: 5,
+  },
   deviceText: { fontSize: 16 },
+  emptyText: {
+    marginTop: 20,
+    textAlign: 'center',
+    fontSize: 16,
+    color: 'gray',
+  },
 });
