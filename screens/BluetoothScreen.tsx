@@ -57,6 +57,7 @@ export default function BluetoothScreen({ navigation }: Props) {
 
       if (connected) {
         setConnectedDevice(device);
+        console.log("==========================",device);
         navigation.navigate('Order', { device }); // Navigate to Order screen
       } else {
         console.warn('Failed to connect');
