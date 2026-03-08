@@ -12,11 +12,14 @@ import {
   Platform,
 } from 'react-native';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App'; // Make sure this path is correct
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+
+const BASE_URL = 'https://p1787ms1-8000.inc1.devtunnels.ms';
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -35,17 +38,22 @@ const LoginScreen = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://juice.jrbilling.in/login/', {
+      const response = await axios.post(`${BASE_URL}/api/auth/login/`, {
         username,
         password,
       }, {
-        timeout: 10000, // 10 second timeout
+        timeout: 10000,
       });
 
-      if (response.data.success) {
-        navigation.replace('LandingScreen'); // Using replace instead of navigate to prevent going back
+      if (response.data.access) {
+        // Save both tokens to AsyncStorage
+        await AsyncStorage.multiSet([
+          ['access_token', response.data.access],
+          ['refresh_token', response.data.refresh],
+        ]);
+        navigation.replace('LandingScreen');
       } else {
-        setError(response.data.message || 'Invalid credentials');
+        setError(response.data.detail || 'Invalid credentials');
       }
     } catch (error) {
       console.error('Login Error:', error);

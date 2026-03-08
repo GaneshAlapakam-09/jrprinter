@@ -1,53 +1,61 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  PermissionsAndroid,
-  Platform,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
+  View, Text, FlatList, PermissionsAndroid, Platform,
+  StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView,
+  StatusBar, useColorScheme, RefreshControl,
 } from 'react-native';
 import BluetoothSerial, { BluetoothDevice } from 'react-native-bluetooth-classic';
-import { Colors, Fonts, Sizes } from '../constants/theme';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+
+// ─── Theme ──────────────────────────────────────────────────────────────────
+const ACCENT = '#7C3AED';
+const light = {
+  bg: '#F5F3FF', card: '#FFFFFF', border: '#E5E7EB',
+  text: '#1F1F2E', subtext: '#6B7280',
+  accent: ACCENT, accentSoft: '#EDE9FE',
+  success: '#059669', successBg: '#ECFDF5',
+  danger: '#EF4444', dangerBg: '#FEF2F2',
+  shadow: '#000',
+};
+const dark = {
+  bg: '#0F0D1A', card: '#1C1A2E', border: '#2D2B42',
+  text: '#F3F0FF', subtext: '#9CA3AF',
+  accent: '#8B5CF6', accentSoft: '#2D1F5E',
+  success: '#34D399', successBg: '#0D2A1E',
+  danger: '#F87171', dangerBg: '#2A1515',
+  shadow: '#000',
+};
 
 export default function BluetoothScreen() {
+  const scheme = useColorScheme();
+  const t = scheme === 'dark' ? dark : light;
+
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null); // ✅ NEW
+  const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
 
   useEffect(() => {
-    const initBluetooth = async () => {
+    const init = async () => {
       await requestPermissions();
       await listDevices();
     };
-    initBluetooth();
+    init();
   }, []);
 
   const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-
-        if (
-          granted['android.permission.BLUETOOTH_CONNECT'] !== PermissionsAndroid.RESULTS.GRANTED ||
-          granted['android.permission.BLUETOOTH_SCAN'] !== PermissionsAndroid.RESULTS.GRANTED ||
-          granted['android.permission.ACCESS_FINE_LOCATION'] !== PermissionsAndroid.RESULTS.GRANTED
-        ) {
-          setError('Bluetooth permissions are required to connect to printers');
-        }
-      } catch (err) {
-        console.error('Permission error:', err);
-        setError('Failed to request Bluetooth permissions');
-      }
+    if (Platform.OS !== 'android') return;
+    try {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+      const allGranted = Object.values(granted).every(v => v === PermissionsAndroid.RESULTS.GRANTED);
+      if (!allGranted) setError('Bluetooth permissions are required to connect to printers');
+    } catch {
+      setError('Failed to request Bluetooth permissions');
     }
   };
 
@@ -57,9 +65,8 @@ export default function BluetoothScreen() {
       setError(null);
       const bonded = await BluetoothSerial.getBondedDevices();
       setDevices(bonded);
-    } catch (err) {
-      console.error('Failed to list bonded devices:', err);
-      setError('Failed to get paired devices. Please try again.');
+    } catch {
+      setError('Failed to get paired devices. Make sure Bluetooth is enabled.');
     } finally {
       setRefreshing(false);
     }
@@ -69,195 +76,187 @@ export default function BluetoothScreen() {
     try {
       setConnectingId(device.id);
       const connected = await device.connect();
-      setConnectingId(null);
-
       if (connected) {
-        setConnectedDevice(device); // ✅ display connection status
+        setConnectedDevice(device);
+        setError(null);
       } else {
         setError('Could not connect to the selected printer');
       }
-    } catch (error) {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
       setConnectingId(null);
-      console.error('Connection error:', error);
-      setError(error instanceof Error ? error.message : 'Connection failed');
     }
   };
 
-  const renderItem = ({ item }: { item: BluetoothDevice }) => (
-    <TouchableOpacity
-      onPress={() => connectToDevice(item)}
-      style={styles.deviceItem}
-      disabled={!!connectingId}
-    >
-      <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.name || 'Unknown Device'}</Text>
-        <Text style={styles.deviceId}>{item.id}</Text>
-      </View>
-      {connectingId === item.id && (
-        <ActivityIndicator size="small" color={Colors.primary} />
-      )}
-    </TouchableOpacity>
-  );
+  const isConnected = (device: BluetoothDevice) => connectedDevice?.id === device.id;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Select Printer</Text>
-      <Text style={styles.subHeading}>Paired Bluetooth printers will appear below</Text>
+    <SafeAreaView style={[s.root, { backgroundColor: t.bg }]}>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-      {/* ✅ Connected device status */}
+      {/* Page header */}
+      <View style={s.header}>
+        <Text style={[s.pageTitle, { color: t.text }]}>Bluetooth Printer</Text>
+        <Text style={[s.pageSubtitle, { color: t.subtext }]}>
+          Select a paired printer to connect
+        </Text>
+      </View>
+
+      {/* Connected status banner */}
       {connectedDevice && (
-        <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>
-            Connected to: <Text style={styles.statusDevice}>{connectedDevice.name || connectedDevice.id}</Text>
-          </Text>
+        <View style={[s.statusBanner, { backgroundColor: t.successBg, borderColor: t.success }]}>
+          <Icon name="check-circle" size={18} color={t.success} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[s.statusLabel, { color: t.success }]}>Connected</Text>
+            <Text style={[s.statusName, { color: t.success }]}>
+              {connectedDevice.name || connectedDevice.id}
+            </Text>
+          </View>
         </View>
       )}
 
-      <TouchableOpacity 
-        style={styles.refreshButton} 
+      {/* Error banner */}
+      {error && (
+        <View style={[s.errorBanner, { backgroundColor: t.dangerBg, borderColor: t.danger }]}>
+          <Icon name="error-outline" size={18} color={t.danger} />
+          <Text style={[s.errorText, { color: t.danger }]}>{error}</Text>
+        </View>
+      )}
+
+      {/* Refresh button */}
+      <TouchableOpacity
+        style={[s.scanBtn, { backgroundColor: t.accent }]}
         onPress={listDevices}
         disabled={refreshing}
       >
-        {refreshing ? (
-          <ActivityIndicator size="small" color={Colors.white} />
-        ) : (
-          <Text style={styles.refreshText}>Refresh Devices</Text>
-        )}
+        {refreshing
+          ? <ActivityIndicator size="small" color="#FFF" />
+          : <>
+            <Icon name="bluetooth-searching" size={18} color="#FFF" />
+            <Text style={s.scanBtnText}>Scan Paired Devices</Text>
+          </>
+        }
       </TouchableOpacity>
 
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
+      {/* Device list */}
+      <FlatList
+        data={devices}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={listDevices}
+            colors={[t.accent]}
+            tintColor={t.accent}
+          />
+        }
+        ListEmptyComponent={
+          !refreshing ? (
+            <View style={s.emptyContainer}>
+              <View style={[s.emptyIconBox, { backgroundColor: t.accentSoft }]}>
+                <Icon name="bluetooth-disabled" size={40} color={t.accent} />
+              </View>
+              <Text style={[s.emptyTitle, { color: t.text }]}>No paired printers</Text>
+              <Text style={[s.emptySub, { color: t.subtext }]}>
+                Make sure your printer is turned on and already paired in your device settings
+              </Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const connected = isConnected(item);
+          const connecting = connectingId === item.id;
+          return (
+            <TouchableOpacity
+              style={[
+                s.deviceCard,
+                { backgroundColor: t.card, borderColor: connected ? t.success : t.border },
+              ]}
+              onPress={() => connectToDevice(item)}
+              disabled={!!connectingId}
+              activeOpacity={0.75}
+            >
+              {/* Icon */}
+              <View style={[s.deviceIcon, { backgroundColor: connected ? t.successBg : t.accentSoft }]}>
+                <Icon
+                  name={connected ? 'bluetooth-connected' : 'print'}
+                  size={22}
+                  color={connected ? t.success : t.accent}
+                />
+              </View>
 
-      {devices.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No paired printers found</Text>
-          <Text style={styles.emptySubText}>
-            Make sure your printer is turned on and paired with this device
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={devices}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={listDevices}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
-            />
-          }
-        />
-      )}
-    </View>
+              {/* Info */}
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[s.deviceName, { color: t.text }]} numberOfLines={1}>
+                  {item.name || 'Unknown Device'}
+                </Text>
+                <Text style={[s.deviceId, { color: t.subtext }]} numberOfLines={1}>
+                  {item.id}
+                </Text>
+              </View>
+
+              {/* Right side */}
+              {connecting ? (
+                <ActivityIndicator size="small" color={t.accent} />
+              ) : connected ? (
+                <View style={[s.connectedPill, { backgroundColor: t.successBg }]}>
+                  <Text style={[s.connectedText, { color: t.success }]}>Connected</Text>
+                </View>
+              ) : (
+                <Icon name="chevron-right" size={20} color={t.subtext} />
+              )}
+            </TouchableOpacity>
+          );
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: Sizes.padding,
-    paddingTop: Sizes.padding,
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  pageTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  pageSubtitle: { fontSize: 13, marginTop: 4 },
+
+  statusBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 14, marginBottom: 8,
+    borderRadius: 14, borderWidth: 1, padding: 14,
   },
-  heading: {
-    ...Fonts.h2,
-    color: Colors.primaryText,
-    marginBottom: Sizes.base / 2,
+  statusLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statusName: { fontSize: 14, fontWeight: '600', marginTop: 2 },
+
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: 14, marginBottom: 8,
+    borderRadius: 14, borderWidth: 1, padding: 14,
   },
-  subHeading: {
-    ...Fonts.body,
-    color: Colors.secondaryText,
-    marginBottom: Sizes.padding,
+  errorText: { fontSize: 13, flex: 1 },
+
+  scanBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginHorizontal: 14, marginVertical: 10,
+    paddingVertical: 13, borderRadius: 14,
   },
-  statusContainer: {
-    backgroundColor: '#e0f7e9',
-    padding: Sizes.base,
-    borderRadius: Sizes.radius,
-    marginBottom: Sizes.padding,
+  scanBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+
+  deviceCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderRadius: 16, padding: 14, marginBottom: 10,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
   },
-  statusText: {
-    ...Fonts.body,
-    color: '#2e7d32',
-  },
-  statusDevice: {
-    fontWeight: 'bold',
-  },
-  refreshButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: Sizes.base,
-    borderRadius: Sizes.radius,
-    alignItems: 'center',
-    marginBottom: Sizes.padding,
-  },
-  refreshText: {
-    ...Fonts.bodyBold,
-    color: Colors.white,
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: Sizes.padding * 2,
-  },
-  deviceItem: {
-    backgroundColor: Colors.white,
-    borderRadius: Sizes.radius,
-    padding: Sizes.padding,
-    marginBottom: Sizes.base,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  deviceInfo: {
-    flex: 1,
-  },
-  deviceName: {
-    ...Fonts.bodyBold,
-    color: Colors.primaryText,
-    marginBottom: Sizes.base / 4,
-  },
-  deviceId: {
-    ...Fonts.caption,
-    color: Colors.secondaryText,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: Sizes.padding * 4,
-  },
-  emptyText: {
-    ...Fonts.h3,
-    color: Colors.primaryText,
-    marginBottom: Sizes.base / 2,
-  },
-  emptySubText: {
-    ...Fonts.body,
-    color: Colors.secondaryText,
-    textAlign: 'center',
-    paddingHorizontal: Sizes.padding * 2,
-  },
-  errorContainer: {
-    backgroundColor: Colors.lightGray,
-    padding: Sizes.base,
-    borderRadius: Sizes.radius,
-    marginBottom: Sizes.padding,
-  },
-  errorText: {
-    ...Fonts.body,
-    color: Colors.danger,
-    textAlign: 'center',
-  },
+  deviceIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  deviceName: { fontSize: 15, fontWeight: '700' },
+  deviceId: { fontSize: 11, marginTop: 3 },
+  connectedPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  connectedText: { fontSize: 11, fontWeight: '700' },
+
+  emptyContainer: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 30 },
+  emptyIconBox: { width: 80, height: 80, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700' },
+  emptySub: { fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 20 },
 });

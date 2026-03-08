@@ -60,7 +60,7 @@ export const getConnectedPrinter = async (): Promise<BluetoothDevice | null> => 
  */
 const formatProductName = (name: string, maxLength: number = 16): string[] => {
   if (name.length <= maxLength) return [name];
-  
+
   const words = name.split(' ');
   const lines: string[] = [];
   let currentLine = words[0];
@@ -85,7 +85,7 @@ const formatLine = (name: string, qty: number, total: number): string => {
   const nameLines = formatProductName(name, maxNameLength);
   const qtyStr = qty.toString().padStart(3);
   const totalStr = total.toFixed(2).padStart(10);
-  
+
   let formattedLines = '';
   nameLines.forEach((line, index) => {
     if (index === 0) {
@@ -96,7 +96,7 @@ const formatLine = (name: string, qty: number, total: number): string => {
       formattedLines += `${line}\n`;
     }
   });
-  
+
   return formattedLines;
 };
 
@@ -141,20 +141,20 @@ export const printReceipt = async (
 
     let receipt = '';
     receipt += '\x1B\x40'; // Initialize printer
-    
+
     // Cafe header
     receipt += '\x1B\x21\x08'; // Emphasized mode
     receipt += centerText(CAFE_INFO.name) + '\n';
     receipt += '\x1B\x21\x00'; // Normal text
     receipt += centerText(CAFE_INFO.address) + '\n';
-    receipt += `GST : ${centerText(CAFE_INFO.gst)}\n`;
+    receipt += centerText(`GST : ${CAFE_INFO.gst}`) + '\n';
     receipt += centerText(getIndiaTime()) + '\n\n';
-    
+
     // Receipt header
     receipt += '\x1B\x21\x08'; // Emphasized mode
     receipt += '     *** ORDER RECEIPT ***\n\n';
     receipt += '\x1B\x21\x00'; // Normal text
-    
+
     receipt += '-------------------------------\n';
     receipt += 'Item              Qty     Total\n';
     receipt += '-------------------------------\n';
@@ -165,16 +165,16 @@ export const printReceipt = async (
     });
 
     receipt += '-------------------------------\n';
-    
+
     // Total
     const totalLabel = `TOTAL (${paymentMode})`;
     const totalAmount = `Rs.${total.toFixed(2)}`;
     const totalSpaces = 32 - totalLabel.length - totalAmount.length;
-    
+
     receipt += '\x1B\x21\x08'; // Emphasized on
     receipt += totalLabel + ' '.repeat(Math.max(1, totalSpaces)) + totalAmount + '\n';
     receipt += '\x1B\x21\x00'; // Emphasized off
-    
+
     // Footer
     receipt += '-------------------------------\n';
     receipt += centerText('Thank you! Visit again.') + '\n';

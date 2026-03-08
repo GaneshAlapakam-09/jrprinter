@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  TextInput, 
-  Button, 
-  Text, 
-  Alert, 
-  StyleSheet, 
+import {
+  View,
+  TextInput,
+  Button,
+  Text,
+  Alert,
+  StyleSheet,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -33,27 +33,30 @@ const LoginScreen = () => {
     }
 
     setLoading(true);
-    
-    try {
-      const res = await api.post('/login', { username, password });
-      const { success, role, token } = res.data;
 
-      if (success && (role === 'admin' || role === 'employee')) {
-        await AsyncStorage.setItem('role', role);
-        await AsyncStorage.setItem('token', token);
+    try {
+      const res = await api.post('/api/auth/login/', { username, password });
+      const { access, refresh, role } = res.data;
+
+      if (access) {
+        await AsyncStorage.multiSet([
+          ['access_token', access],
+          ['refresh_token', refresh],
+          ['role', role ?? 'employee'],
+        ]);
 
         navigation.reset({
           index: 0,
-          routes: [{ name: 'Main', params: { role } }],
+          routes: [{ name: 'Main', params: { role: role ?? 'employee' } }],
         });
       } else {
-        Alert.alert('Login Failed', 'Invalid credentials or missing role');
+        Alert.alert('Login Failed', 'Invalid credentials');
       }
     } catch (error: any) {
       console.error(error);
       Alert.alert(
-        'Login Error', 
-        error.response?.data?.message || 'Invalid credentials or server error'
+        'Login Error',
+        error.response?.data?.detail || 'Invalid credentials or server error'
       );
     } finally {
       setLoading(false);
@@ -68,8 +71,8 @@ const LoginScreen = () => {
       <View style={styles.innerContainer}>
         {/* Logo or App Name */}
         <View style={styles.logoContainer}>
-          <Image 
-            source={require('../assets/logo.jpg')} 
+          <Image
+            source={require('../assets/logo.jpg')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -103,20 +106,20 @@ const LoginScreen = () => {
               style={styles.input}
               onSubmitEditing={handleLogin}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setSecureTextEntry(!secureTextEntry)}
               style={styles.eyeIcon}
             >
-              <Ionicons 
-                name={secureTextEntry ? 'eye-off-outline' : 'eye-outline'} 
-                size={20} 
-                color="#666" 
+              <Ionicons
+                name={secureTextEntry ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color="#666"
               />
             </TouchableOpacity>
           </View>
 
           {/* Login Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}

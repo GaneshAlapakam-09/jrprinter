@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import LoginScreen from '../screens/LoginScreen';
-import TabsBasedOnRole from './TabsBasedOnRole';
+import DrawerNavigator from './DrawerNavigator';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -18,7 +18,7 @@ const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Main" component={TabsBasedOnRole} />
+        <Stack.Screen name="Main" component={DrawerNavigator as any} />
       </Stack.Navigator>
     </NavigationContainer>
   );

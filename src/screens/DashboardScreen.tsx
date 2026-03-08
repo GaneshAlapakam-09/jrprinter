@@ -10,19 +10,19 @@ import {
   TouchableOpacity,
   Linking,
   Modal,
-  Pressable
+  Pressable,
+  useColorScheme,
+  StatusBar,
+  SafeAreaView,
 } from 'react-native';
-import {
-  LineChart
-} from 'react-native-chart-kit';
+import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { DataTable } from 'react-native-paper';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type SalesData = {
   labels: string[];
-  datasets: {
-    data: number[];
-  }[];
+  datasets: { data: number[] }[];
 };
 
 type ItemSales = {
@@ -33,12 +33,110 @@ type ItemSales = {
 
 type ItemHourlySales = {
   labels: string[];
-  datasets: {
-    data: number[];
-  }[];
+  datasets: { data: number[] }[];
 };
 
+// ─── Theme ───────────────────────────────────────────────────────────────────
+const ACCENT = '#7C3AED';
+const ACCENT_LIGHT = '#8B5CF6';
+const ACCENT_SOFT = '#EDE9FE';
+
+const light = {
+  bg: '#F5F3FF',
+  card: '#FFFFFF',
+  border: '#E5E7EB',
+  text: '#1F1F2E',
+  subtext: '#6B7280',
+  accent: ACCENT,
+  accentLight: ACCENT_LIGHT,
+  accentSoft: ACCENT_SOFT,
+  chartBg: '#FFFFFF',
+  chartLabel: '#374151',
+  tableBg: '#FFFFFF',
+  tableHeaderBg: '#F9FAFB',
+  tableRowAlt: '#F5F3FF',
+  shadow: '#000',
+  pill: '#EDE9FE',
+  pillText: ACCENT,
+  inputBg: '#F3F4F6',
+  modalBg: '#FFFFFF',
+  noDataIcon: '#D1D5DB',
+};
+
+const dark = {
+  bg: '#0F0D1A',
+  card: '#1C1A2E',
+  border: '#2D2B42',
+  text: '#F3F0FF',
+  subtext: '#9CA3AF',
+  accent: ACCENT_LIGHT,
+  accentLight: '#A78BFA',
+  accentSoft: '#2D1F5E',
+  chartBg: '#1C1A2E',
+  chartLabel: '#D1D5DB',
+  tableBg: '#1C1A2E',
+  tableHeaderBg: '#13112A',
+  tableRowAlt: '#221F38',
+  shadow: '#000',
+  pill: '#2D1F5E',
+  pillText: '#A78BFA',
+  inputBg: '#2D2B42',
+  modalBg: '#1C1A2E',
+  noDataIcon: '#4B5563',
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const BASE_URL = 'https://p1787ms1-8000.inc1.devtunnels.ms';
+const { width: SCREEN_W } = Dimensions.get('window');
+
+const formatINR = (val: number) =>
+  `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+const SectionHeader = ({
+  icon,
+  title,
+  theme,
+}: {
+  icon: string;
+  title: string;
+  theme: typeof light;
+}) => (
+  <View style={sectionHeaderStyles.row}>
+    <View style={[sectionHeaderStyles.iconBox, { backgroundColor: theme.accentSoft }]}>
+      <Icon name={icon} size={18} color={theme.accent} />
+    </View>
+    <Text style={[sectionHeaderStyles.title, { color: theme.text }]}>{title}</Text>
+  </View>
+);
+
+const sectionHeaderStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  iconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  title: { fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+});
+
+const EmptyState = ({ icon, message, theme }: { icon: string; message: string; theme: typeof light }) => (
+  <View style={{ justifyContent: 'center', alignItems: 'center', paddingVertical: 36 }}>
+    <Icon name={icon} size={38} color={theme.noDataIcon} />
+    <Text style={{ color: theme.subtext, fontSize: 13, marginTop: 10, textAlign: 'center' }}>
+      {message}
+    </Text>
+  </View>
+);
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 const DashboardScreen = () => {
+  const scheme = useColorScheme();
+  const t = scheme === 'dark' ? dark : light;
+
   const [todayData, setTodayData] = useState<SalesData | null>(null);
   const [monthData, setMonthData] = useState<SalesData | null>(null);
   const [yearData, setYearData] = useState<SalesData | null>(null);
@@ -47,58 +145,36 @@ const DashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<string>('');
+  const [selectedItem, setSelectedItem] = useState('');
   const [itemHourlyData, setItemHourlyData] = useState<ItemHourlySales | null>(null);
   const [itemLoading, setItemLoading] = useState(false);
-  const [todayScrollPosition, setTodayScrollPosition] = useState(0);
-  const [monthScrollPosition, setMonthScrollPosition] = useState(0);
-  const [yearScrollPosition, setYearScrollPosition] = useState(0);
-  const todayScrollViewRef = React.useRef<ScrollView>(null);
-  const monthScrollViewRef = React.useRef<ScrollView>(null);
-  const yearScrollViewRef = React.useRef<ScrollView>(null);
 
+  const todayRef = React.useRef<ScrollView>(null);
+  const monthRef = React.useRef<ScrollView>(null);
+  const yearRef = React.useRef<ScrollView>(null);
+
+  // ─── Data fetching ──────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
+      const [todayRes, monthRes, yearRes, itemRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/sales/today/`),
+        fetch(`${BASE_URL}/api/sales/this-month/`),
+        fetch(`${BASE_URL}/api/sales/this-year/`),
+        fetch(`${BASE_URL}/api/yesterday-sales/`),
+      ]);
+      if (!todayRes.ok || !monthRes.ok || !yearRes.ok || !itemRes.ok)
+        throw new Error('Failed to fetch data');
 
-      const [todayRes, monthRes, yearRes, itemSalesRes] = await Promise.all([
-        fetch('http://66.103.210.129:8777/api/sales/today/'),
-        fetch('http://66.103.210.129:8777/api/sales/this-month/'),
-        fetch('http://66.103.210.129:8777/api/sales/this-year/'),
-        fetch('http://66.103.210.129:8777/api/yesterday-sales/')
+      const [todayJson, monthJson, yearJson, itemJson] = await Promise.all([
+        todayRes.json(), monthRes.json(), yearRes.json(), itemRes.json(),
       ]);
 
-      if (!todayRes.ok || !monthRes.ok || !yearRes.ok || !itemSalesRes.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const todayJson = await todayRes.json();
-      const monthJson = await monthRes.json();
-      const yearJson = await yearRes.json();
-      const itemSalesJson = await itemSalesRes.json();
-
-      // Process today's data to format time ranges as 4-5, 5-6, etc.
-      if (todayJson.labels && todayJson.labels.length > 0) {
-        const processedTodayData = processTodayData(todayJson);
-        setTodayData(processedTodayData);
-      } else {
-        setTodayData(todayJson);
-      }
-
-      // Process month names to short format (Jan, Feb, etc.)
-      if (yearJson.labels && yearJson.labels.length > 0) {
-        const processedYearData = processYearData(yearJson);
-        setYearData(processedYearData);
-      } else {
-        setYearData(yearJson);
-      }
-
-      // Set month data directly
+      setTodayData(todayJson.labels?.length ? processTodayData(todayJson) : todayJson);
       setMonthData(monthJson);
-      
-      // Set item sales data
-      setItemSales(itemSalesJson);
+      setYearData(yearJson.labels?.length ? processYearData(yearJson) : yearJson);
+      setItemSales(itemJson);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
     } finally {
@@ -110,710 +186,499 @@ const DashboardScreen = () => {
   const fetchItemHourlyData = async (itemName: string) => {
     try {
       setItemLoading(true);
-      const response = await fetch(
-        `http://66.103.210.129:8777/api/sales/item-hourly/${encodeURIComponent(itemName)}/`
+      const res = await fetch(
+        `${BASE_URL}/api/sales/item-hourly/${encodeURIComponent(itemName)}/`
       );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch item data');
-      }
-      
-      const data = await response.json();
-      
-      // Process the hourly data
-      if (data.labels && data.labels.length > 0) {
-        const processedData = {
-          labels: data.labels,
-          datasets: [{
-            data: data.datasets[1].data // Using amount data (₹)
-          }]
-        };
-        setItemHourlyData(processedData);
-      } else {
-        setItemHourlyData(null);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load item data');
+      if (!res.ok) throw new Error('Failed to fetch item data');
+      const data = await res.json();
+      setItemHourlyData(
+        data.labels?.length
+          ? { labels: data.labels, datasets: [{ data: data.datasets[1].data }] }
+          : null
+      );
+    } catch {
       setItemHourlyData(null);
     } finally {
       setItemLoading(false);
     }
   };
 
-  // Format hourly data as 4-5, 5-6, etc.
-  const processTodayData = (data: SalesData): SalesData => {
-    const newLabels = [];
-    for (let i = 0; i < data.labels.length; i++) {
-      if (i < data.labels.length - 1) {
-        newLabels.push(`${data.labels[i]}-${data.labels[i + 1]}`);
-      } else {
-        newLabels.push(data.labels[i]);
-      }
-    }
+  const processTodayData = (data: SalesData): SalesData => ({
+    labels: data.labels.map((l, i) =>
+      i < data.labels.length - 1 ? `${l}-${data.labels[i + 1]}` : l
+    ),
+    datasets: data.datasets,
+  });
 
-    return {
-      labels: newLabels,
-      datasets: data.datasets
-    };
-  };
-
-  // Format month names to short format (Jan, Feb, etc.)
   const processYearData = (data: SalesData): SalesData => {
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const newLabels = data.labels.map(label => {
-      const monthIndex = parseInt(label) - 1;
-      return monthNames[monthIndex] || label;
-    });
-
-    return {
-      labels: newLabels,
-      datasets: data.datasets
-    };
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return { labels: data.labels.map(l => names[parseInt(l) - 1] || l), datasets: data.datasets };
   };
 
-  const handleItemPress = (item: string) => {
-    setSelectedItem(item);
-    setModalVisible(true);
-    fetchItemHourlyData(item);
-  };
-
-  const getPeakHour = () => {
-    if (!itemHourlyData || !itemHourlyData.datasets[0].data.length) return 'N/A';
-    
-    const maxValue = Math.max(...itemHourlyData.datasets[0].data);
-    const peakIndex = itemHourlyData.datasets[0].data.indexOf(maxValue);
-    return itemHourlyData.labels[peakIndex] || 'N/A';
-  };
-
-  const getTotalRevenue = () => {
-    if (!itemHourlyData || !itemHourlyData.datasets[0].data.length) return 0;
-    return itemHourlyData.datasets[0].data.reduce((sum, val) => sum + val, 0);
-  };
-
+  useEffect(() => { fetchData(); }, []);
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    if (todayData && todayData.labels && todayData.labels.length > 0) {
-      // Calculate scroll position to show the end of the data (most recent)
-      const scrollWidth = todayData.labels.length * 50;
-      setTimeout(() => {
-        todayScrollViewRef.current?.scrollTo({x: scrollWidth, animated: false});
-      }, 100);
+    if (todayData?.labels?.length) {
+      setTimeout(() => todayRef.current?.scrollTo({ x: todayData.labels.length * 50, animated: false }), 100);
     }
   }, [todayData]);
-
   useEffect(() => {
-    if (monthData && monthData.labels && monthData.labels.length > 0) {
-      // Calculate scroll position to show the end of the data (most recent)
-      const scrollWidth = monthData.labels.length * 40;
-      setTimeout(() => {
-        monthScrollViewRef.current?.scrollTo({x: scrollWidth, animated: false});
-      }, 100);
+    if (monthData?.labels?.length) {
+      setTimeout(() => monthRef.current?.scrollTo({ x: monthData.labels.length * 40, animated: false }), 100);
     }
   }, [monthData]);
-
   useEffect(() => {
-    if (yearData && yearData.labels && yearData.labels.length > 0) {
-      // Calculate scroll position to show the end of the data (most recent)
-      const scrollWidth = yearData.labels.length * 60;
-      setTimeout(() => {
-        yearScrollViewRef.current?.scrollTo({x: scrollWidth, animated: false});
-      }, 100);
+    if (yearData?.labels?.length) {
+      setTimeout(() => yearRef.current?.scrollTo({ x: yearData.labels.length * 60, animated: false }), 100);
     }
   }, [yearData]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
+  const isEmpty = (data: SalesData | null) =>
+    !data || !data.labels?.length || !data.datasets?.[0]?.data?.length;
+
+  const getPeakHour = () => {
+    if (!itemHourlyData?.datasets[0]?.data.length) return 'N/A';
+    const max = Math.max(...itemHourlyData.datasets[0].data);
+    return itemHourlyData.labels[itemHourlyData.datasets[0].data.indexOf(max)] || 'N/A';
   };
 
-  const isEmpty = (data: SalesData | null) => {
-    return !data || !data.labels?.length || !data.datasets?.[0]?.data?.length;
-  };
+  const getTotalRevenue = () =>
+    itemHourlyData?.datasets[0]?.data.reduce((s, v) => s + v, 0) ?? 0;
 
-  const handleEmailPress = () => {
-    Linking.openURL('mailto:project.jrtechnologies@gmail.com');
-  };
-
-  const handleWebPress = () => {
-    Linking.openURL('http://www.jrtechnologiesindia.com/');
-  };
-
-  const handlePhonePress = () => {
-    Linking.openURL('tel:+919600332679');
-  };
-
-  // Common chart configuration
+  // ─── Chart config ───────────────────────────────────────────────────────────
   const chartConfig = {
-    backgroundGradientFrom: '#FFFFFF',
-    backgroundGradientTo: '#FFFFFF',
+    backgroundGradientFrom: t.chartBg,
+    backgroundGradientTo: t.chartBg,
     decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(106, 99, 255, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '4',
-      strokeWidth: '2',
-      stroke: '#6C63FF'
-    },
-    propsForLabels: {
-      fontSize: 10,
-    },
-    fillShadowGradient: '#6C63FF',
-    fillShadowGradientOpacity: 0.2,
+    color: (opacity = 1) => `rgba(124, 58, 237, ${opacity})`,
+    labelColor: (opacity = 1) =>
+      scheme === 'dark'
+        ? `rgba(209, 213, 219, ${opacity})`
+        : `rgba(55, 65, 81, ${opacity})`,
+    propsForDots: { r: '4', strokeWidth: '2', stroke: ACCENT },
+    propsForLabels: { fontSize: 10 },
+    fillShadowGradient: ACCENT,
+    fillShadowGradientOpacity: 0.15,
+    style: { borderRadius: 14 },
   };
 
+  // ─── Loading / Error states ─────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#6C63FF" />
-        <Text style={styles.loadingText}>Loading Cafe Dashboard...</Text>
-      </View>
+      <SafeAreaView style={[styles.centered, { backgroundColor: t.bg }]}>
+        <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+        <View style={[styles.loadingCard, { backgroundColor: t.card }]}>
+          <ActivityIndicator size="large" color={t.accent} />
+          <Text style={[styles.loadingText, { color: t.accent }]}>
+            Loading Dashboard…
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Icon name="error-outline" size={50} color="#FF6B6B" />
-        <Text style={styles.errorText}>Oops! Something went wrong</Text>
-        <Text style={styles.errorSubText}>{error}</Text>
-        <TouchableOpacity onPress={fetchData} style={styles.retryButton}>
-          <Icon name="refresh" size={20} color="#FFF" />
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={[styles.centered, { backgroundColor: t.bg }]}>
+        <View style={[styles.errorCard, { backgroundColor: t.card }]}>
+          <Icon name="wifi-off" size={44} color="#EF4444" />
+          <Text style={[styles.errorTitle, { color: t.text }]}>Something went wrong</Text>
+          <Text style={[styles.errorSub, { color: t.subtext }]}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: t.accent }]}
+            onPress={fetchData}
+          >
+            <Icon name="refresh" size={18} color="#FFF" />
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
+  // ─── Main Render ─────────────────────────────────────────────────────────────
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#6C63FF']}
-          tintColor="#6C63FF"
-        />
-      }
-    >
-      {/* Today's Sales - Hourly */}
-      <View style={styles.chartContainer}>
-        <View style={styles.chartHeader}>
-          <Icon name="schedule" size={20} color="#6C63FF" />
-          <Text style={styles.chartTitle}>Today's Hourly Sales</Text>
-        </View>
-        {!isEmpty(todayData) ? (
-          <ScrollView
-            ref={todayScrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chartScrollView}
-            onScroll={(event) => setTodayScrollPosition(event.nativeEvent.contentOffset.x)}
-            scrollEventThrottle={16}
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { backgroundColor: t.bg }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchData(); }}
+            colors={[t.accent]}
+            tintColor={t.accent}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Page header ── */}
+        <View style={styles.pageHeader}>
+          <View>
+            <Text style={[styles.pageTitle, { color: t.text }]}>Dashboard</Text>
+            <Text style={[styles.pageSubtitle, { color: t.subtext }]}>
+              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.refreshPill, { backgroundColor: t.accentSoft }]}
+            onPress={() => { setRefreshing(true); fetchData(); }}
           >
-            <LineChart
-              data={todayData!}
-              width={Math.max(Dimensions.get('window').width - 32, todayData!.labels.length * 50)}
-              height={250}
-              yAxisLabel="₹"
-              yAxisSuffix=""
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chartStyle}
-              verticalLabelRotation={0}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-              segments={5}
-              fromZero
-            />
-          </ScrollView>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Icon name="hourglass-empty" size={40} color="#999" />
-            <Text style={styles.noDataText}>No sales data for today yet</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Item-wise Sales Table */}
-      <View style={styles.tableContainer}>
-        <View style={styles.tableHeader}>
-          <Icon name="list-alt" size={20} color="#6C63FF" />
-          <Text style={styles.tableTitle}>Yesterday's Item Sales</Text>
+            <Icon name="refresh" size={16} color={t.accent} />
+          </TouchableOpacity>
         </View>
-        
-        {itemSales.length > 0 ? (
-          <DataTable>
-            <DataTable.Header>
-              <DataTable.Title style={styles.tableCell}>Item</DataTable.Title>
-              <DataTable.Title numeric style={styles.tableCell}>Count</DataTable.Title>
-              <DataTable.Title numeric style={styles.tableCell}>Amount (₹)</DataTable.Title>
-            </DataTable.Header>
 
-            {itemSales.map((item, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleItemPress(item.item)}
-                activeOpacity={0.7}
-              >
-                <DataTable.Row>
-                  <DataTable.Cell style={styles.tableCell}>
-                    <Text style={styles.itemName}>{item.item}</Text>
-                  </DataTable.Cell>
-                  <DataTable.Cell numeric style={styles.tableCell}>
-                    {item.total_sales}
-                  </DataTable.Cell>
-                  <DataTable.Cell numeric style={styles.tableCell}>
-                    ₹{item.amount.toFixed(2)}
-                  </DataTable.Cell>
-                </DataTable.Row>
-              </TouchableOpacity>
-            ))}
-          </DataTable>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Icon name="list" size={40} color="#999" />
-            <Text style={styles.noDataText}>No item sales data for yesterday</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Monthly Sales - Daily */}
-      <View style={styles.chartContainer}>
-        <View style={styles.chartHeader}>
-          <Icon name="calendar-today" size={20} color="#6C63FF" />
-          <Text style={styles.chartTitle}>Monthly Daily Sales</Text>
+        {/* ── Today's Hourly Sales ── */}
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
+          <SectionHeader icon="schedule" title="Today's Hourly Sales" theme={t} />
+          {!isEmpty(todayData) ? (
+            <ScrollView
+              ref={todayRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              <LineChart
+                data={todayData!}
+                width={Math.max(SCREEN_W - 48, todayData!.labels.length * 52)}
+                height={220}
+                yAxisLabel="₹"
+                yAxisSuffix=""
+                chartConfig={chartConfig}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines
+                segments={4}
+                fromZero
+              />
+            </ScrollView>
+          ) : (
+            <EmptyState icon="hourglass-empty" message="No sales recorded today yet" theme={t} />
+          )}
         </View>
-        {!isEmpty(monthData) ? (
-          <ScrollView
-            ref={monthScrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chartScrollView}
-            onScroll={(event) => setMonthScrollPosition(event.nativeEvent.contentOffset.x)}
-            scrollEventThrottle={16}
+
+        {/* ── Yesterday's Item Sales ── */}
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
+          <SectionHeader icon="bar-chart" title="Yesterday's Item Sales" theme={t} />
+          {itemSales.length > 0 ? (
+            <DataTable>
+              <DataTable.Header style={{ backgroundColor: t.tableHeaderBg }}>
+                <DataTable.Title textStyle={{ color: t.subtext, fontSize: 12, fontWeight: '700' }}>
+                  Item
+                </DataTable.Title>
+                <DataTable.Title numeric textStyle={{ color: t.subtext, fontSize: 12, fontWeight: '700' }}>
+                  Qty
+                </DataTable.Title>
+                <DataTable.Title numeric textStyle={{ color: t.subtext, fontSize: 12, fontWeight: '700' }}>
+                  Amount
+                </DataTable.Title>
+              </DataTable.Header>
+
+              {itemSales.map((item, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => {
+                    setSelectedItem(item.item);
+                    setModalVisible(true);
+                    fetchItemHourlyData(item.item);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <DataTable.Row
+                    style={{
+                      backgroundColor: i % 2 === 0 ? t.card : t.tableRowAlt,
+                      borderBottomColor: t.border,
+                    }}
+                  >
+                    <DataTable.Cell>
+                      <Text style={{ color: t.text, fontSize: 13, fontWeight: '500' }} numberOfLines={1}>
+                        {item.item}
+                      </Text>
+                    </DataTable.Cell>
+                    <DataTable.Cell numeric>
+                      <View style={[styles.badge, { backgroundColor: t.accentSoft }]}>
+                        <Text style={{ color: t.accent, fontSize: 11, fontWeight: '700' }}>
+                          {item.total_sales}
+                        </Text>
+                      </View>
+                    </DataTable.Cell>
+                    <DataTable.Cell numeric>
+                      <Text style={{ color: t.accent, fontSize: 13, fontWeight: '700' }}>
+                        ₹{item.amount.toFixed(0)}
+                      </Text>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                </TouchableOpacity>
+              ))}
+            </DataTable>
+          ) : (
+            <EmptyState icon="receipt-long" message="No item sales data for yesterday" theme={t} />
+          )}
+          {itemSales.length > 0 && (
+            <Text style={[styles.tapHint, { color: t.subtext }]}>
+              ↑ Tap any row to view hourly breakdown
+            </Text>
+          )}
+        </View>
+
+        {/* ── Monthly Daily Sales ── */}
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
+          <SectionHeader icon="calendar-today" title="This Month — Daily Sales" theme={t} />
+          {!isEmpty(monthData) ? (
+            <ScrollView ref={monthRef} horizontal showsHorizontalScrollIndicator={false}>
+              <LineChart
+                data={monthData!}
+                width={Math.max(SCREEN_W - 48, monthData!.labels.length * 42)}
+                height={220}
+                yAxisLabel="₹"
+                yAxisSuffix=""
+                chartConfig={chartConfig}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines
+                segments={4}
+                fromZero
+              />
+            </ScrollView>
+          ) : (
+            <EmptyState icon="event-busy" message="No monthly sales data available" theme={t} />
+          )}
+        </View>
+
+        {/* ── Yearly Monthly Sales ── */}
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
+          <SectionHeader icon="date-range" title="This Year — Monthly Sales" theme={t} />
+          {!isEmpty(yearData) ? (
+            <ScrollView ref={yearRef} horizontal showsHorizontalScrollIndicator={false}>
+              <LineChart
+                data={yearData!}
+                width={Math.max(SCREEN_W - 48, yearData!.labels.length * 62)}
+                height={220}
+                yAxisLabel="₹"
+                yAxisSuffix=""
+                chartConfig={chartConfig}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines
+                segments={4}
+                fromZero
+              />
+            </ScrollView>
+          ) : (
+            <EmptyState icon="insert-chart-outlined" message="No yearly sales data available" theme={t} />
+          )}
+        </View>
+
+        {/* ── Contact Support ── */}
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
+          <SectionHeader icon="support-agent" title="Contact Support" theme={t} />
+          <TouchableOpacity
+            style={[styles.contactRow, { borderColor: t.border }]}
+            onPress={() => Linking.openURL('mailto:project.jrtechnologies@gmail.com')}
           >
-            <LineChart
-              data={monthData!}
-              width={Math.max(Dimensions.get('window').width - 32, monthData!.labels.length * 40)}
-              height={250}
-              yAxisLabel="₹"
-              yAxisSuffix=""
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chartStyle}
-              verticalLabelRotation={0}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-              segments={5}
-              fromZero
-            />
-          </ScrollView>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Icon name="event-busy" size={40} color="#999" />
-            <Text style={styles.noDataText}>No monthly sales data available</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Yearly Sales - Monthly */}
-      <View style={styles.chartContainer}>
-        <View style={styles.chartHeader}>
-          <Icon name="date-range" size={20} color="#6C63FF" />
-          <Text style={styles.chartTitle}>Yearly Monthly Sales</Text>
-        </View>
-        {!isEmpty(yearData) ? (
-          <ScrollView
-            ref={yearScrollViewRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chartScrollView}
-            onScroll={(event) => setYearScrollPosition(event.nativeEvent.contentOffset.x)}
-            scrollEventThrottle={16}
+            <View style={[styles.contactIcon, { backgroundColor: t.accentSoft }]}>
+              <Icon name="email" size={16} color={t.accent} />
+            </View>
+            <Text style={[styles.contactText, { color: t.text }]}>
+              project.jrtechnologies@gmail.com
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.contactRow, { borderColor: t.border, borderBottomWidth: 0 }]}
+            onPress={() => Linking.openURL('tel:+919600332679')}
           >
-            <LineChart
-              data={yearData!}
-              width={Math.max(Dimensions.get('window').width - 32, yearData!.labels.length * 60)}
-              height={250}
-              yAxisLabel="₹"
-              yAxisSuffix=""
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chartStyle}
-              verticalLabelRotation={0}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-              segments={5}
-              fromZero
-            />
-          </ScrollView>
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Icon name="insert-chart-outlined" size={40} color="#999" />
-            <Text style={styles.noDataText}>No yearly sales data available</Text>
-          </View>
-        )}
-      </View>
+            <View style={[styles.contactIcon, { backgroundColor: t.accentSoft }]}>
+              <Icon name="phone" size={16} color={t.accent} />
+            </View>
+            <Text style={[styles.contactText, { color: t.text }]}>+91 96003 32679</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Contact Information */}
-      <View style={styles.contactContainer}>
-        <Text style={styles.contactTitle}>Contact Support</Text>
-        <TouchableOpacity
-          style={styles.contactItem}
-          onPress={handleEmailPress}
-        >
-          <Icon name="email" size={20} color="#6C63FF" />
-          <Text style={styles.contactText}>project.jrtechnologies@gmail.com</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.contactItem}
-          onPress={handlePhonePress}
-        >
-          <Icon name="phone" size={20} color="#6C63FF" />
-          <Text style={styles.contactText}>+91 96003 32679</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Last Updated */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Last updated: {new Date().toLocaleString()}
-        </Text>
-        <TouchableOpacity onPress={handleWebPress}>
-          <Text style={styles.developerText}>
-            Developed by JR Technologies
+        {/* ── Footer ── */}
+        <View style={styles.footer}>
+          <Text style={[styles.footerTime, { color: t.subtext }]}>
+            Last updated: {new Date().toLocaleTimeString('en-IN')}
           </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity onPress={() => Linking.openURL('http://www.jrtechnologiesindia.com/')}>
+            <Text style={[styles.footerBrand, { color: t.accent }]}>
+              Developed by JR Technologies
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
-      {/* Modal for Item Hourly Sales */}
+      {/* ── Item Hourly Modal ── */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.centeredView}>
-          <View style={styles.modalView}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {selectedItem} - Yesterday's Hourly Sales
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setModalVisible(false)}
+        />
+        <View style={[styles.modalSheet, { backgroundColor: t.modalBg }]}>
+          {/* drag handle */}
+          <View style={[styles.dragHandle, { backgroundColor: t.border }]} />
+
+          <View style={styles.modalHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.modalTitle, { color: t.text }]} numberOfLines={1}>
+                {selectedItem}
               </Text>
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Icon name="close" size={24} color="#6C63FF" />
-              </Pressable>
+              <Text style={[styles.modalSub, { color: t.subtext }]}>
+                Yesterday's hourly revenue
+              </Text>
             </View>
-            
-            {itemLoading ? (
-              <View style={styles.modalLoader}>
-                <ActivityIndicator size="large" color="#6C63FF" />
-              </View>
-            ) : itemHourlyData ? (
-              <>
-                <ScrollView 
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.modalChartContainer}
-                >
-                  <LineChart
-                    data={itemHourlyData}
-                    width={Math.max(Dimensions.get('window').width - 64, itemHourlyData.labels.length * 60)}
-                    height={250}
-                    yAxisLabel="₹"
-                    yAxisSuffix=""
-                    chartConfig={{
-                      ...chartConfig,
-                      formatYLabel: (value) => parseInt(value).toLocaleString('en-IN'),
-                      propsForLabels: {
-                        fontSize: 10,
-                      },
-                    }}
-                    bezier
-                    style={styles.modalChart}
-                    verticalLabelRotation={0}
-                    withVerticalLines={false}
-                    withHorizontalLines={true}
-                    segments={5}
-                    fromZero
-                  />
-                </ScrollView>
-                <View style={styles.modalStats}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Peak Hour</Text>
-                    <Text style={styles.statValue}>{getPeakHour()}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Total Revenue</Text>
-                    <Text style={styles.statValue}>
-                      ₹{getTotalRevenue().toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <View style={styles.noDataContainer}>
-                <Icon name="hourglass-empty" size={40} color="#999" />
-                <Text style={styles.noDataText}>No hourly data available</Text>
-              </View>
-            )}
+            <Pressable
+              style={[styles.closeBtn, { backgroundColor: t.accentSoft }]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Icon name="close" size={18} color={t.accent} />
+            </Pressable>
           </View>
+
+          {itemLoading ? (
+            <View style={styles.modalLoader}>
+              <ActivityIndicator size="large" color={t.accent} />
+            </View>
+          ) : itemHourlyData ? (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <LineChart
+                  data={itemHourlyData}
+                  width={Math.max(SCREEN_W - 40, itemHourlyData.labels.length * 62)}
+                  height={210}
+                  yAxisLabel="₹"
+                  yAxisSuffix=""
+                  chartConfig={chartConfig}
+                  bezier
+                  style={styles.modalChart}
+                  withVerticalLines={false}
+                  withHorizontalLines
+                  segments={4}
+                  fromZero
+                />
+              </ScrollView>
+
+              {/* Stat pills */}
+              <View style={styles.statRow}>
+                <View style={[styles.statPill, { backgroundColor: t.accentSoft }]}>
+                  <Text style={[styles.statLabel, { color: t.subtext }]}>Peak Hour</Text>
+                  <Text style={[styles.statValue, { color: t.accent }]}>{getPeakHour()}</Text>
+                </View>
+                <View style={[styles.statPill, { backgroundColor: t.accentSoft }]}>
+                  <Text style={[styles.statLabel, { color: t.subtext }]}>Total Revenue</Text>
+                  <Text style={[styles.statValue, { color: t.accent }]}>
+                    {formatINR(getTotalRevenue())}
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <EmptyState icon="hourglass-empty" message="No hourly data available for this item" theme={t} />
+          )}
         </View>
       </Modal>
-    </ScrollView>
+    </SafeAreaView>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    paddingBottom: 30
+  scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
+
+  // States
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  loadingCard: {
+    alignItems: 'center', padding: 32, borderRadius: 20,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA'
+  loadingText: { marginTop: 14, fontSize: 15, fontWeight: '600' },
+  errorCard: {
+    alignItems: 'center', padding: 32, borderRadius: 20, width: '100%',
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
   },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: '#6C63FF',
+  errorTitle: { fontSize: 18, fontWeight: '700', marginTop: 12 },
+  errorSub: { fontSize: 13, marginTop: 6, textAlign: 'center', lineHeight: 20 },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 20,
+    paddingHorizontal: 24, paddingVertical: 11, borderRadius: 12,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 20
+  retryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700', marginLeft: 8 },
+
+  // Page header
+  pageHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 16, marginTop: 8,
   },
-  errorText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FF6B6B',
-    marginTop: 15,
-    textAlign: 'center'
+  pageTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  pageSubtitle: { fontSize: 13, marginTop: 2 },
+  refreshPill: {
+    width: 36, height: 36, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
   },
-  errorSubText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 10,
-    textAlign: 'center',
-    marginHorizontal: 30,
+
+  // Card
+  card: {
+    borderRadius: 18, padding: 16, marginBottom: 16,
+    borderWidth: 1,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8, elevation: 2,
   },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-    backgroundColor: '#6C63FF',
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 8,
+
+  // Chart
+  chart: { borderRadius: 12, marginLeft: -8 },
+
+  // Table badges
+  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  tapHint: { fontSize: 11, textAlign: 'right', marginTop: 10, fontStyle: 'italic' },
+
+  // Contact
+  contactRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
+  contactIcon: {
+    width: 32, height: 32, borderRadius: 9,
+    justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
-  chartContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  contactText: { fontSize: 13, fontWeight: '500', flex: 1 },
+
+  // Footer
+  footer: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
+  footerTime: { fontSize: 11, marginBottom: 4 },
+  footerBrand: { fontSize: 12, fontWeight: '700' },
+
+  // Modal
+  modalOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  modalChartContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  modalSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 32,
+    maxHeight: '78%',
   },
-  tableContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  dragHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  modalHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
+  modalSub: { fontSize: 12, marginTop: 2 },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center', marginLeft: 12,
   },
-  tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  tableTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 10,
-  },
-  tableCell: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  itemName: {
-    fontWeight: '500',
-    color: '#333',
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 10,
-  },
-  chartScrollView: {
-    paddingRight: 16,
-  },
-  chartStyle: {
-    borderRadius: 12,
-    marginLeft: -10,
-  },
-  noDataContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noDataText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 14,
-    marginTop: 10,
-  },
-  contactContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  contactTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  contactText: {
-    fontSize: 14,
-    color: '#555',
-    marginLeft: 10,
-  },
-  footer: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-    marginBottom: 5,
-  },
-  developerText: {
-    fontSize: 12,
-    color: '#6C63FF',
-    fontWeight: '600',
-  },
-  centeredView: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalView: {
-    margin: 20,
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-  },
-  closeButton: {
-    marginLeft: 10,
-  },
-  modalLoader: {
-    height: 250,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalChart: {
-    marginVertical: 8,
-    borderRadius: 8,
-  },
-  modalStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#6C63FF',
-  },
+  modalLoader: { height: 210, justifyContent: 'center', alignItems: 'center' },
+  modalChart: { borderRadius: 12, marginLeft: -8 },
+
+  // Stat pills in modal
+  statRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  statPill: { flex: 1, borderRadius: 14, padding: 14, alignItems: 'center' },
+  statLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { fontSize: 18, fontWeight: '800' },
 });
 
 export default DashboardScreen;

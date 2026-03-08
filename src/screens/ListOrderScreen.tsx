@@ -1,67 +1,92 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  RefreshControl,
-  ScrollView,
-  Modal,
-  TouchableWithoutFeedback,
+  View, Text, FlatList, StyleSheet, ActivityIndicator,
+  TouchableOpacity, RefreshControl, ScrollView, Modal,
+  Pressable, SafeAreaView, StatusBar, useColorScheme,
 } from 'react-native';
-import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, 
-         startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../navigation/types';
+import {
+  format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek,
+  startOfMonth, endOfMonth, isWithinInterval,
+} from 'date-fns';
 import api from '../api/axios';
-import { Colors, Fonts, Sizes } from '../constants/theme';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
+// ─── Types ──────────────────────────────────────────────────────────────────
 type Order = {
   id: number;
   date: string;
   total_amount: number;
   payment_mode: string | null;
-  items?: Array<{
-    id: number;
-    product_name: string;
-    quantity: number;
-    price: number;
-  }>;
+  items?: Array<{ id: number; product_name: string; quantity: number; price: number }>;
 };
-
 type FilterOption = 'all' | 'today' | 'week' | 'month' | 'sixMonths';
 
+// ─── Theme ──────────────────────────────────────────────────────────────────
+const ACCENT = '#7C3AED';
+const light = {
+  bg: '#F5F3FF', card: '#FFFFFF', border: '#E5E7EB',
+  text: '#1F1F2E', subtext: '#6B7280',
+  accent: ACCENT, accentSoft: '#EDE9FE',
+  success: '#059669', successBg: '#ECFDF5',
+  info: '#2563EB', infoBg: '#EFF6FF',
+  cash: '#D97706', cashBg: '#FFFBEB',
+  upi: '#7C3AED', upiBg: '#EDE9FE',
+  danger: '#EF4444',
+};
+const dark = {
+  bg: '#0F0D1A', card: '#1C1A2E', border: '#2D2B42',
+  text: '#F3F0FF', subtext: '#9CA3AF',
+  accent: '#8B5CF6', accentSoft: '#2D1F5E',
+  success: '#34D399', successBg: '#0D2A1E',
+  info: '#60A5FA', infoBg: '#1E3A5F',
+  cash: '#FCD34D', cashBg: '#2D2200',
+  upi: '#A78BFA', upiBg: '#2D1F5E',
+  danger: '#F87171',
+};
+
+const FILTERS: { label: string; value: FilterOption }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Today', value: 'today' },
+  { label: 'This Week', value: 'week' },
+  { label: 'This Month', value: 'month' },
+  { label: '6 Months', value: 'sixMonths' },
+];
+
 const ListOrderScreen = () => {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const scheme = useColorScheme();
+  const t = scheme === 'dark' ? dark : light;
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterOption>('all');
-  const [revenueData, setRevenueData] = useState({
-    total: 0,
-    cash: 0,
-    upi: 0,
-  });
+  const [revenueData, setRevenueData] = useState({ total: 0, cash: 0, upi: 0 });
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   const fetchOrders = async () => {
     try {
       setError(null);
-      const response = await api.get('/orders');
-      setOrders(response.data);
-      setFilteredOrders(response.data);
-      calculateRevenue(response.data);
+      const response = await api.get('/api/bills/');
+      const mapped = response.data.map((b: any) => ({
+        ...b,
+        date: b.created_at,
+        total_amount: parseFloat(b.total_amount) || 0,
+        payment_mode: b.payment_mode ?? null,
+        items: (b.items ?? []).map((item: any) => ({
+          ...item,
+          price: parseFloat(item.price) || 0,
+        })),
+      }));
+      setOrders(mapped);
+      setFilteredOrders(mapped);
+      calculateRevenue(mapped);
     } catch (err) {
       console.error('Failed to fetch orders:', err);
       setError('Failed to load orders. Please try again.');
-      setOrders([]);
-      setFilteredOrders([]);
+      setOrders([]); setFilteredOrders([]);
       setRevenueData({ total: 0, cash: 0, upi: 0 });
     } finally {
       setLoading(false);
@@ -69,20 +94,13 @@ const ListOrderScreen = () => {
     }
   };
 
-  const calculateRevenue = (ordersList: Order[]) => {
-    let total = 0;
-    let cash = 0;
-    let upi = 0;
-
-    ordersList.forEach(order => {
-      total += order.total_amount;
-      if (order.payment_mode?.toLowerCase().includes('cash')) {
-        cash += order.total_amount;
-      } else if (order.payment_mode?.toLowerCase().includes('upi')) {
-        upi += order.total_amount;
-      }
+  const calculateRevenue = (list: Order[]) => {
+    let total = 0, cash = 0, upi = 0;
+    list.forEach(o => {
+      total += o.total_amount;
+      if (o.payment_mode?.toLowerCase().includes('cash')) cash += o.total_amount;
+      else if (o.payment_mode?.toLowerCase().includes('upi')) upi += o.total_amount;
     });
-
     setRevenueData({
       total: parseFloat(total.toFixed(2)),
       cash: parseFloat(cash.toFixed(2)),
@@ -90,617 +108,341 @@ const ListOrderScreen = () => {
     });
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  useEffect(() => {
-    applyFilter(activeFilter);
-  }, [orders, activeFilter]);
+  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => { applyFilter(activeFilter); }, [orders, activeFilter]);
 
   const applyFilter = (filter: FilterOption) => {
     if (!orders.length) return;
-
     const now = new Date();
-    let filtered: Order[] = [];
-
+    let filtered: Order[];
     switch (filter) {
       case 'today':
-        const todayStart = startOfDay(now);
-        const todayEnd = endOfDay(now);
-        filtered = orders.filter(order => 
-          isWithinInterval(new Date(order.date), { start: todayStart, end: todayEnd })
-        );
+        filtered = orders.filter(o => isWithinInterval(new Date(o.date), { start: startOfDay(now), end: endOfDay(now) }));
         break;
-      
       case 'week':
-        const weekStart = startOfWeek(now);
-        const weekEnd = endOfWeek(now);
-        filtered = orders.filter(order => 
-          isWithinInterval(new Date(order.date), { start: weekStart, end: weekEnd })
-        );
+        filtered = orders.filter(o => isWithinInterval(new Date(o.date), { start: startOfWeek(now), end: endOfWeek(now) }));
         break;
-      
       case 'month':
-        const monthStart = startOfMonth(now);
-        const monthEnd = endOfMonth(now);
-        filtered = orders.filter(order => 
-          isWithinInterval(new Date(order.date), { start: monthStart, end: monthEnd })
-        );
+        filtered = orders.filter(o => isWithinInterval(new Date(o.date), { start: startOfMonth(now), end: endOfMonth(now) }));
         break;
-      
       case 'sixMonths':
-        const sixMonthsAgo = subDays(now, 180);
-        filtered = orders.filter(order => 
-          new Date(order.date) >= sixMonthsAgo
-        );
+        filtered = orders.filter(o => new Date(o.date) >= subDays(now, 180));
         break;
-      
       default:
         filtered = [...orders];
-        break;
     }
-
     setFilteredOrders(filtered);
     calculateRevenue(filtered);
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchOrders();
+  const paymentColor = (mode: string | null) => {
+    if (!mode) return t.subtext;
+    if (mode.toLowerCase().includes('cash')) return t.cash;
+    if (mode.toLowerCase().includes('upi')) return t.upi;
+    return t.subtext;
+  };
+  const paymentBg = (mode: string | null) => {
+    if (!mode) return t.card;
+    if (mode.toLowerCase().includes('cash')) return t.cashBg;
+    if (mode.toLowerCase().includes('upi')) return t.upiBg;
+    return t.card;
   };
 
-  const handleOrderPress = (order: Order) => {
-    setSelectedOrder(order);
-    setModalVisible(true);
-  };
-
-  const closeModal = () => {
-    setModalVisible(false);
-    setSelectedOrder(null);
-  };
-
-  const renderOrderItem = ({ item }: { item: Order }) => {
-    const itemCount = item.items?.length || 0;
-    const paymentMode = item.payment_mode || 'Not specified';
-    
-    return (
-      <TouchableOpacity
-        style={styles.itemContainer}
-        onPress={() => handleOrderPress(item)}
-      >
-        <View style={styles.itemHeader}>
-          <Text style={styles.orderNumber}>Order #{item.id}</Text>
-          <Text style={styles.orderDate}>
-            {format(new Date(item.date), 'dd MMM yyyy, hh:mm a')}
-          </Text>
-        </View>
-        
-        {item.items && item.items.length > 0 && (
-          <View style={styles.itemsSummary}>
-            <Text style={styles.itemsHeader}>Items ({itemCount}):</Text>
-            {item.items.slice(0, 3).map((orderItem) => (
-              <View key={orderItem.id} style={styles.itemRow}>
-                <Text style={styles.itemName}>
-                  {orderItem.product_name} (x{orderItem.quantity})
-                </Text>
-                <Text style={styles.itemPrice}>₹{orderItem.price.toFixed(2)}</Text>
-              </View>
-            ))}
-            {item.items.length > 3 && (
-              <Text style={styles.moreItems}>+{item.items.length - 3} more items</Text>
-            )}
-          </View>
-        )}
-        
-        <View style={styles.itemFooter}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Total:</Text>
-            <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Payment:</Text>
-            <Text style={[
-              styles.detailValue,
-              paymentMode.toLowerCase().includes('cash') && styles.cashPayment,
-              paymentMode.toLowerCase().includes('upi') && styles.upiPayment
-            ]}>
-              {paymentMode}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const FilterButton = ({ label, value }: { label: string; value: FilterOption }) => (
-    <TouchableOpacity
-      style={[
-        styles.filterButton,
-        activeFilter === value && styles.activeFilterButton
-      ]}
-      onPress={() => setActiveFilter(value)}
-    >
-      <Text style={[
-        styles.filterButtonText,
-        activeFilter === value && styles.activeFilterButtonText
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const RevenueCard = ({ title, amount, color }: { title: string; amount: number; color: string }) => (
-    <View style={[styles.revenueCard, { borderLeftColor: color }]}>
-      <Text style={styles.revenueTitle}>{title}</Text>
-      <Text style={styles.revenueAmount}>₹{amount.toFixed(2)}</Text>
-    </View>
-  );
-
-  const renderOrderDetailsModal = () => (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      visible={modalVisible}
-      onRequestClose={closeModal}
-    >
-      <TouchableWithoutFeedback onPress={closeModal}>
-        <View style={styles.modalOverlay} />
-      </TouchableWithoutFeedback>
-      
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          {selectedOrder && (
-            <>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Order #{selectedOrder.id}</Text>
-                <Text style={styles.modalDate}>
-                  {format(new Date(selectedOrder.date), 'dd MMM yyyy, hh:mm a')}
-                </Text>
-              </View>
-              
-              <ScrollView style={styles.modalItemsContainer}>
-                {selectedOrder.items?.map((item) => (
-                  <View key={item.id} style={styles.modalItemRow}>
-                    <View style={styles.modalItemInfo}>
-                      <Text style={styles.modalItemName}>{item.product_name}</Text>
-                      <Text style={styles.modalItemQuantity}>x{item.quantity}</Text>
-                    </View>
-                    <Text style={styles.modalItemPrice}>₹{(item.price * item.quantity).toFixed(2)}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-              
-              <View style={styles.modalFooter}>
-                <View style={styles.modalTotalRow}>
-                  <Text style={styles.modalTotalLabel}>Total:</Text>
-                  <Text style={styles.modalTotalAmount}>₹{selectedOrder.total_amount.toFixed(2)}</Text>
-                </View>
-                <View style={styles.modalPaymentRow}>
-                  <Text style={styles.modalPaymentLabel}>Payment Method:</Text>
-                  <Text style={[
-                    styles.modalPaymentValue,
-                    selectedOrder.payment_mode?.toLowerCase().includes('cash') && styles.cashPayment,
-                    selectedOrder.payment_mode?.toLowerCase().includes('upi') && styles.upiPayment
-                  ]}>
-                    {selectedOrder.payment_mode || 'Not specified'}
-                  </Text>
-                </View>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={closeModal}
-              >
-                <Text style={styles.closeButtonText}>Close</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-
+  // ── Loading / Error ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <SafeAreaView style={[s.centered, { backgroundColor: t.bg }]}>
+        <ActivityIndicator size="large" color={t.accent} />
+        <Text style={[s.loadingText, { color: t.subtext }]}>Loading orders…</Text>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity onPress={fetchOrders} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+      <SafeAreaView style={[s.centered, { backgroundColor: t.bg }]}>
+        <Icon name="wifi-off" size={44} color={t.danger} />
+        <Text style={[s.errorTitle, { color: t.text }]}>Couldn't load orders</Text>
+        <Text style={[s.errorSub, { color: t.subtext }]}>{error}</Text>
+        <TouchableOpacity style={[s.retryBtn, { backgroundColor: t.accent }]} onPress={fetchOrders}>
+          <Icon name="refresh" size={16} color="#FFF" />
+          <Text style={s.retryBtnText}>Retry</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        horizontal 
+    <SafeAreaView style={[s.root, { backgroundColor: t.bg }]}>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+
+      {/* ── Revenue summary cards ───────────────────────────────────────── */}
+      <View style={s.statRow}>
+        {[
+          { label: 'Total', amount: revenueData.total, color: t.accent, bg: t.accentSoft, icon: 'account-balance-wallet' },
+          { label: 'Cash', amount: revenueData.cash, color: t.cash, bg: t.cashBg, icon: 'payments' },
+          { label: 'UPI', amount: revenueData.upi, color: t.upi, bg: t.upiBg, icon: 'qr-code' },
+        ].map(stat => (
+          <View key={stat.label} style={[s.statCard, { backgroundColor: t.card, borderColor: t.border }]}>
+            <View style={[s.statIcon, { backgroundColor: stat.bg }]}>
+              <Icon name={stat.icon} size={16} color={stat.color} />
+            </View>
+            <Text style={[s.statLabel, { color: t.subtext }]}>{stat.label}</Text>
+            <Text style={[s.statAmount, { color: stat.color }]} numberOfLines={1}>
+              ₹{stat.amount.toFixed(0)}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* ── Filter tabs ─────────────────────────────────────────────────── */}
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterContainer}
+        contentContainerStyle={s.filterRow}
       >
-        <FilterButton label="All" value="all" />
-        <FilterButton label="Today" value="today" />
-        <FilterButton label="This Week" value="week" />
-        <FilterButton label="This Month" value="month" />
-        <FilterButton label="Last 6 Months" value="sixMonths" />
+        {FILTERS.map(f => (
+          <TouchableOpacity
+            key={f.value}
+            style={[s.filterPill,
+            { backgroundColor: activeFilter === f.value ? t.accent : t.card,height: 35,marginBottom: 20, borderColor: activeFilter === f.value ? t.accent : t.border }
+            ]}
+            onPress={() => setActiveFilter(f.value)}
+          >
+            <Text style={[s.filterText, { color: activeFilter === f.value ? '#FFF' : t.subtext }]}>
+              {f.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
 
-      <View style={styles.revenueContainer}>
-        <RevenueCard title="Total Revenue" amount={revenueData.total} color={Colors.primary} />
-        <RevenueCard title="Cash" amount={revenueData.cash} color={Colors.success} />
-        <RevenueCard title="UPI" amount={revenueData.upi} color={Colors.secondary} />
-      </View>
-      
-      {filteredOrders.length > 0 ? (
-        <FlatList
-          data={filteredOrders}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderOrderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
-            />
-          }
-          ListFooterComponent={<View style={styles.footer} />}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No orders found</Text>
-          <Text style={styles.emptySubText}>
-            {activeFilter === 'all' 
-              ? "You haven't placed any orders yet" 
-              : `No orders for this ${activeFilter === 'today' ? 'day' : 
-                 activeFilter === 'week' ? 'week' : 
-                 activeFilter === 'month' ? 'month' : 'period'}`}
-          </Text>
-        </View>
-      )}
-      
-      {renderOrderDetailsModal()}
-    </View>
+      {/* ── Order count ─────────────────────────────────────────────────── */}
+      <Text style={[s.countText, { color: t.subtext }]}>
+        {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''}
+      </Text>
+
+      {/* ── Order list ──────────────────────────────────────────────────── */}
+      <FlatList
+        data={filteredOrders}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchOrders(); }}
+            colors={[t.accent]}
+            tintColor={t.accent}
+          />
+        }
+        ListEmptyComponent={
+          <View style={s.emptyContainer}>
+            <Icon name="receipt-long" size={48} color={t.subtext} style={{ opacity: 0.4 }} />
+            <Text style={[s.emptyTitle, { color: t.text }]}>No orders found</Text>
+            <Text style={[s.emptySub, { color: t.subtext }]}>
+              {activeFilter === 'all' ? "No orders placed yet" : `No orders in this period`}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const itemCount = item.items?.reduce((sum, i) => sum + i.quantity, 0) ?? 0;
+          const pm = item.payment_mode || 'N/A';
+          return (
+            <TouchableOpacity
+              style={[s.orderCard, { backgroundColor: t.card, borderColor: t.border }]}
+              onPress={() => { setSelectedOrder(item); setModalVisible(true); }}
+              activeOpacity={0.75}
+            >
+              {/* Header */}
+              <View style={s.orderCardHeader}>
+                <View style={[s.orderIdBox, { backgroundColor: t.accentSoft }]}>
+                  <Text style={[s.orderIdText, { color: t.accent }]}>#{item.id}</Text>
+                </View>
+                <Text style={[s.orderDate, { color: t.subtext }]}>
+                  {format(new Date(item.date), 'dd MMM yyyy · hh:mm a')}
+                </Text>
+              </View>
+
+              {/* Item preview */}
+              {item.items && item.items.length > 0 && (
+                <Text style={[s.itemPreview, { color: t.subtext }]} numberOfLines={1}>
+                  {item.items.slice(0, 3).map(i => `${i.product_name} ×${i.quantity}`).join('  ·  ')}
+                  {item.items.length > 3 ? ` +${item.items.length - 3} more` : ''}
+                </Text>
+              )}
+
+              {/* Footer */}
+              <View style={s.orderCardFooter}>
+                <View style={[s.paymentPill, { backgroundColor: paymentBg(item.payment_mode) }]}>
+                  <Icon
+                    name={pm.toLowerCase().includes('upi') ? 'qr-code' : 'payments'}
+                    size={12}
+                    color={paymentColor(item.payment_mode)}
+                  />
+                  <Text style={[s.paymentText, { color: paymentColor(item.payment_mode) }]}>{pm}</Text>
+                </View>
+                <Text style={[s.orderTotal, { color: t.success }]}>
+                  ₹{item.total_amount.toFixed(2)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+      />
+
+      {/* ── Order detail modal (bottom sheet) ───────────────────────────── */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <Pressable style={s.overlay} onPress={() => setModalVisible(false)} />
+        {selectedOrder && (
+          <View style={[s.modalSheet, { backgroundColor: t.card }]}>
+            <View style={[s.dragHandle, { backgroundColor: t.border }]} />
+
+            {/* Modal header */}
+            <View style={s.modalHeader}>
+              <View>
+                <Text style={[s.modalTitle, { color: t.text }]}>Order #{selectedOrder.id}</Text>
+                <Text style={[s.modalDate, { color: t.subtext }]}>
+                  {format(new Date(selectedOrder.date), 'dd MMM yyyy · hh:mm a')}
+                </Text>
+              </View>
+              <Pressable style={[s.closeBox, { backgroundColor: t.accentSoft }]} onPress={() => setModalVisible(false)}>
+                <Icon name="close" size={16} color={t.accent} />
+              </Pressable>
+            </View>
+
+            {/* Items list */}
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {selectedOrder.items?.map(item => (
+                <View key={item.id} style={[s.modalItemRow, { borderColor: t.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.modalItemName, { color: t.text }]} numberOfLines={1}>
+                      {item.product_name}
+                    </Text>
+                    <Text style={[s.modalItemQty, { color: t.subtext }]}>×{item.quantity} @ ₹{item.price.toFixed(2)}</Text>
+                  </View>
+                  <Text style={[s.modalItemTotal, { color: t.accent }]}>
+                    ₹{(item.price * item.quantity).toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Modal footer */}
+            <View style={[s.modalFooter, { borderColor: t.border }]}>
+              <View style={s.footerRow}>
+                <Text style={[s.footerLabel, { color: t.subtext }]}>Payment</Text>
+                <View style={[s.paymentPill, { backgroundColor: paymentBg(selectedOrder.payment_mode) }]}>
+                  <Text style={[s.paymentText, { color: paymentColor(selectedOrder.payment_mode) }]}>
+                    {selectedOrder.payment_mode || 'N/A'}
+                  </Text>
+                </View>
+              </View>
+              <View style={s.footerRow}>
+                <Text style={[s.footerLabel, { color: t.subtext }]}>Total</Text>
+                <Text style={[s.footerTotal, { color: t.success }]}>
+                  ₹{selectedOrder.total_amount.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: Sizes.padding,
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  loadingText: { marginTop: 12, fontSize: 14 },
+  errorTitle: { fontSize: 17, fontWeight: '700', marginTop: 12 },
+  errorSub: { fontSize: 13, marginTop: 6, textAlign: 'center' },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 18, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
+  retryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+
+  // Stat row
+  statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
+  statCard: {
+    flex: 1, borderRadius: 14, padding: 12, borderWidth: 1,
+    alignItems: 'flex-start',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  title: {
-    fontSize: Fonts.h2.fontSize,
-    fontWeight: Fonts.h2.fontWeight,
-    color: Colors.primaryText,
-    marginVertical: Sizes.padding,
+  statIcon: { width: 30, height: 30, borderRadius: 9, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  statAmount: { fontSize: 15, fontWeight: '800' },
+
+  // Filters
+  filterRow: { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  filterPill: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1,
   },
-  filterContainer: {
-    paddingBottom: Sizes.base,
-    marginBottom: Sizes.base,
-    paddingTop: Sizes.padding,
-    paddingRight: Sizes.padding,
+  filterText: { fontSize: 13, fontWeight: '600' },
+  countText: { fontSize: 12, paddingHorizontal: 14, paddingBottom: 6 },
+
+  // Order cards
+  orderCard: {
+    borderRadius: 16, borderWidth: 1, marginBottom: 10, overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
   },
-  filterButton: {
-    paddingHorizontal: Sizes.padding,
-    paddingVertical: Sizes.base,
-    borderRadius: Sizes.radius,
-    backgroundColor: Colors.lightGray,
-    marginRight: Sizes.base,
-    height: 40,
-    justifyContent: 'center',
+  orderCardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, paddingBottom: 6,
   },
-  activeFilterButton: {
-    backgroundColor: Colors.primary,
+  orderIdBox: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  orderIdText: { fontSize: 12, fontWeight: '800' },
+  orderDate: { fontSize: 12 },
+  itemPreview: { fontSize: 12, paddingHorizontal: 12, paddingBottom: 8 },
+  orderCardFooter: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 10,
   },
-  filterButtonText: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.secondaryText,
+  paymentPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
-  activeFilterButtonText: {
-    color: Colors.white,
+  paymentText: { fontSize: 11, fontWeight: '700' },
+  orderTotal: { fontSize: 16, fontWeight: '800' },
+
+  // Empty
+  emptyContainer: { alignItems: 'center', paddingTop: 60 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 12 },
+  emptySub: { fontSize: 13, marginTop: 6 },
+
+  // Modal
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  revenueContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Sizes.padding,
-    marginBottom: Sizes.padding,
+  modalSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 34,
   },
-  revenueCard: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: Sizes.radius,
-    padding: Sizes.base,
-    marginRight: Sizes.base,
-    borderLeftWidth: 4,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  revenueTitle: {
-    fontSize: Fonts.caption.fontSize,
-    color: Colors.secondaryText,
-    marginBottom: Sizes.base / 2,
-  },
-  revenueAmount: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.primaryText,
-  },
-  listContent: {
-    paddingBottom: Sizes.padding * 2,
-  },
-  itemContainer: {
-    backgroundColor: Colors.white,
-    borderRadius: Sizes.radius,
-    padding: Sizes.padding,
-    marginBottom: Sizes.padding,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Sizes.base,
-  },
-  orderNumber: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.primaryText,
-  },
-  orderDate: {
-    fontSize: Fonts.caption.fontSize,
-    fontWeight: Fonts.caption.fontWeight,
-    color: Colors.secondaryText,
-  },
-  itemsSummary: {
-    marginBottom: Sizes.base,
-  },
-  itemsHeader: {
-    fontSize: Fonts.body.fontSize,
-    fontWeight: Fonts.body.fontWeight,
-    color: Colors.primaryText,
-    marginBottom: Sizes.base / 2,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Sizes.base / 2,
-  },
-  itemName: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.secondaryText,
-    flex: 2,
-  },
-  itemPrice: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.primaryText,
-    flex: 1,
-    textAlign: 'right',
-  },
-  moreItems: {
-    fontSize: Fonts.caption.fontSize,
-    color: Colors.secondaryText,
-    fontStyle: 'italic',
-  },
-  itemFooter: {
-    marginTop: Sizes.base,
-    borderTopWidth: 1,
-    borderTopColor: Colors.lightGray,
-    paddingTop: Sizes.base,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Sizes.base / 2,
-  },
-  detailLabel: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.secondaryText,
-  },
-  detailValue: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.primaryText,
-  },
-  cashPayment: {
-    color: Colors.success,
-  },
-  upiPayment: {
-    color: Colors.secondary,
-  },
-  totalAmount: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.primary,
-  },
-  footer: {
-    height: Sizes.padding * 2,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: Sizes.padding * 4,
-  },
-  emptyText: {
-    fontSize: Fonts.h3.fontSize,
-    fontWeight: Fonts.h3.fontWeight,
-    color: Colors.primaryText,
-    marginBottom: Sizes.base / 2,
-  },
-  emptySubText: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.secondaryText,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Sizes.padding,
-  },
-  errorText: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.danger,
-    marginBottom: Sizes.padding,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Sizes.padding * 2,
-    paddingVertical: Sizes.base,
-    borderRadius: Sizes.radius,
-  },
-  retryButtonText: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.white,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  modalContent: {
-    backgroundColor: Colors.white,
-    borderRadius: Sizes.radius * 2,
-    width: '90%',
-    maxHeight: '80%',
-    padding: Sizes.padding,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray,
-    paddingBottom: Sizes.base,
-    marginBottom: Sizes.base,
-  },
-  modalTitle: {
-    fontSize: Fonts.h3.fontSize,
-    fontWeight: Fonts.h3.fontWeight,
-    color: Colors.primaryText,
-    textAlign: 'center',
-  },
-  modalDate: {
-    fontSize: Fonts.caption.fontSize,
-    color: Colors.secondaryText,
-    textAlign: 'center',
-    marginTop: Sizes.base / 2,
-  },
-  modalItemsContainer: {
-    maxHeight: '60%',
-    marginBottom: Sizes.base,
-  },
+  dragHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalDate: { fontSize: 12, marginTop: 2 },
+  closeBox: { width: 30, height: 30, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
   modalItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Sizes.base / 2,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.lightGray,
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  modalItemInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 2,
-  },
-  modalItemName: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.primaryText,
-  },
-  modalItemQuantity: {
-    fontSize: Fonts.caption.fontSize,
-    color: Colors.secondaryText,
-    marginLeft: Sizes.base,
-  },
-  modalItemPrice: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.primaryText,
-    flex: 1,
-    textAlign: 'right',
-  },
+  modalItemName: { fontSize: 14, fontWeight: '600' },
+  modalItemQty: { fontSize: 12, marginTop: 2 },
+  modalItemTotal: { fontSize: 14, fontWeight: '700' },
   modalFooter: {
-    marginTop: Sizes.base,
-    paddingTop: Sizes.base,
-    borderTopWidth: 1,
-    borderTopColor: Colors.lightGray,
+    borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14, marginTop: 8, gap: 10,
   },
-  modalTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Sizes.base / 2,
-  },
-  modalTotalLabel: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.primaryText,
-  },
-  modalTotalAmount: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.primary,
-  },
-  modalPaymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalPaymentLabel: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.secondaryText,
-  },
-  modalPaymentValue: {
-    fontSize: Fonts.body.fontSize,
-    color: Colors.primaryText,
-  },
-  closeButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: Sizes.radius,
-    padding: Sizes.base,
-    marginTop: Sizes.padding,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: Fonts.bodyBold.fontSize,
-    fontWeight: Fonts.bodyBold.fontWeight,
-    color: Colors.white,
-  },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footerLabel: { fontSize: 13, fontWeight: '600' },
+  footerTotal: { fontSize: 22, fontWeight: '900' },
 });
 
 export default ListOrderScreen;
