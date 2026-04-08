@@ -19,7 +19,7 @@ import { RootStackParamList } from '../App'; // Make sure this path is correct
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
-const BASE_URL = 'https://p1787ms1-8000.inc1.devtunnels.ms';
+import { BASE_URL } from '../src/api/axios';
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useLayoutEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet, ActivityIndicator,
   TouchableOpacity, RefreshControl, ScrollView, Modal,
@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import api from '../api/axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useNavigation } from '@react-navigation/native';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Order = {
@@ -55,6 +56,24 @@ const FILTERS: { label: string; value: FilterOption }[] = [
 const ListOrderScreen = () => {
   const scheme = useColorScheme();
   const t = scheme === 'dark' ? dark : light;
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'Orders List',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+      headerShown: true,
+    });
+  }, [navigation, t.text, t.card]);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -205,7 +224,7 @@ const ListOrderScreen = () => {
           <TouchableOpacity
             key={f.value}
             style={[s.filterPill,
-            { backgroundColor: activeFilter === f.value ? t.accent : t.card,height: 35,marginBottom: 20, borderColor: activeFilter === f.value ? t.accent : t.border }
+            { backgroundColor: activeFilter === f.value ? t.accent : t.card, height: 35, marginBottom: 20, borderColor: activeFilter === f.value ? t.accent : t.border }
             ]}
             onPress={() => setActiveFilter(f.value)}
           >

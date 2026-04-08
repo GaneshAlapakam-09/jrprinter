@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import api from '../api/axios';
-import { printReceipt, isPrinterConnected, getPrinterName } from '../utils/printer';
+import { printReceipt, isPrinterConnected, getPrinterName, getBatteryLevel } from '../utils/printer';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const ACCENT = '#7C3AED';
@@ -122,8 +122,24 @@ const PaymentButton = ({
 export default function OrderScreen() {
   const scheme = useColorScheme();
   const t = scheme === 'dark' ? dark : light;
-
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'New Order',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+      headerShown: true,
+    });
+  }, [navigation, t.text, t.card]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
@@ -138,6 +154,24 @@ export default function OrderScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [syncTimeout, setSyncTimeout] = useState<NodeJS.Timeout | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [batteryLevel, setBatteryLevel] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'New Order',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+    });
+  }, [navigation, t.text, t.card]);
+
 
   const loadData = async () => {
     try {
@@ -202,11 +236,16 @@ export default function OrderScreen() {
       if (connected) {
         const name = await getPrinterName();
         setPrinterName(name);
+        const batt = await getBatteryLevel();
+        setBatteryLevel(batt);
+      } else {
+        setBatteryLevel(null);
       }
     } catch (error) {
       console.error('Error checking printer status:', error);
       setPrinterConnected(false);
       setPrinterName(null);
+      setBatteryLevel(null);
     }
   };
 
@@ -529,9 +568,17 @@ export default function OrderScreen() {
           <View style={styles.header}>
             <View style={[styles.printerStatus, { backgroundColor: t.printerBg }]}>
               <Icon name="print" size={16} color={printerConnected ? t.printerOk : t.printerFail} />
-              <Text style={[styles.printerText, { color: printerConnected ? t.printerOk : t.printerFail }]}>
-                {printerConnected ? (printerName || 'Printer Ready') : 'No Printer'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.printerText, { color: printerConnected ? t.printerOk : t.printerFail }]}>
+                  {printerConnected ? (printerName || 'Printer Ready') : 'No Printer'}
+                </Text>
+                {printerConnected && batteryLevel && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: t.success + '20', paddingHorizontal: 4, borderRadius: 4 }}>
+                    <Icon name="battery-std" size={10} color={t.success} />
+                    <Text style={{ fontSize: 9, fontWeight: 'bold', color: t.success }}>{batteryLevel}</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {offlineOrdersCount > 0 && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity, Alert,
   ScrollView, ActivityIndicator, Modal, Pressable, FlatList,
@@ -30,8 +30,25 @@ const dark = {
 const AddProductScreen = () => {
   const scheme = useColorScheme();
   const t = scheme === 'dark' ? dark : light;
-
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'Add Product',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+      headerShown: true,
+    });
+  }, [navigation, t.text, t.card]);
+
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
@@ -121,13 +138,7 @@ const AddProductScreen = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={s.header}>
-            <Text style={[s.pageTitle, { color: t.text }]}>Add Product</Text>
-            <Text style={[s.pageSubtitle, { color: t.subtext }]}>
-              Fill in the details below to add a new product
-            </Text>
-          </View>
+          {/* Form card */}
 
           {/* Form card */}
           <View style={[s.card, { backgroundColor: t.card, borderColor: t.border }]}>

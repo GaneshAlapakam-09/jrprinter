@@ -7,11 +7,15 @@ import { RootStackParamList } from '../navigation/types';
 import TabsBasedOnRole from './TabsBasedOnRole';
 import SetLabelScreen from '../screens/SetLabelScreen';
 import AddLabelProductScreen from '../screens/AddLabelProductScreen';
+import ListLabelProductScreen from '../screens/ListLabelProductScreen';
+import StockInwardScreen from '../screens/StockInwardScreen';
 
 export type RootDrawerParamList = {
     HomeTabs: { role: string };
     SetLabel: { userId?: number };
     AddLabelProduct: undefined;
+    ListLabelProduct: undefined;
+    StockInward: undefined;
 };
 
 const Drawer = createDrawerNavigator<RootDrawerParamList>();
@@ -57,6 +61,26 @@ const DrawerNavigator: React.FC<Props> = ({ route }) => {
                     title: 'Add Label Product',
                     drawerIcon: ({ color, size }) => (
                         <Icon name="add-box" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Drawer.Screen
+                name="ListLabelProduct"
+                component={ListLabelProductScreen}
+                options={{
+                    title: 'Product List',
+                    drawerIcon: ({ color, size }) => (
+                        <Icon name="library-books" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Drawer.Screen
+                name="StockInward"
+                component={StockInwardScreen}
+                options={{
+                    title: 'Stock Inward',
+                    drawerIcon: ({ color, size }) => (
+                        <Icon name="archive" size={size} color={color} />
                     ),
                 }}
             />

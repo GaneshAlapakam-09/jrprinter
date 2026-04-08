@@ -77,6 +77,14 @@ const ListProductScreen = () => {
   // ── Header button ──────────────────────────────────────────────────────
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity
           style={{

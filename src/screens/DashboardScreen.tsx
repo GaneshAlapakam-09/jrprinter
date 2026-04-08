@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { DataTable } from 'react-native-paper';
+import { DataTable, IconButton } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SalesData = {
@@ -86,7 +87,7 @@ const dark = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const BASE_URL = 'https://p1787ms1-8000.inc1.devtunnels.ms';
+import { BASE_URL } from '../api/axios';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const formatINR = (val: number) =>
@@ -136,6 +137,24 @@ const EmptyState = ({ icon, message, theme }: { icon: string; message: string; t
 const DashboardScreen = () => {
   const scheme = useColorScheme();
   const t = scheme === 'dark' ? dark : light;
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'Dashboard',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+      headerShown: true,
+    });
+  }, [navigation, t.text, t.card]);
 
   const [todayData, setTodayData] = useState<SalesData | null>(null);
   const [monthData, setMonthData] = useState<SalesData | null>(null);
@@ -314,7 +333,6 @@ const DashboardScreen = () => {
         {/* ── Page header ── */}
         <View style={styles.pageHeader}>
           <View>
-            <Text style={[styles.pageTitle, { color: t.text }]}>Dashboard</Text>
             <Text style={[styles.pageSubtitle, { color: t.subtext }]}>
               {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
             </Text>

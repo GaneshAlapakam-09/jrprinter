@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useLayoutEffect, useRef } from 'react';
 import {
   View, Text, FlatList, PermissionsAndroid, Platform,
   StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView,
   StatusBar, useColorScheme, RefreshControl,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import BluetoothSerial, { BluetoothDevice } from 'react-native-bluetooth-classic';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -29,12 +30,49 @@ const dark = {
 export default function BluetoothScreen() {
   const scheme = useColorScheme();
   const t = scheme === 'dark' ? dark : light;
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          style={{ marginLeft: 14 }}
+          onPress={() => (navigation as any).openDrawer()}
+        >
+          <Icon name="menu" size={28} color={t.text} />
+        </TouchableOpacity>
+      ),
+      headerTitle: 'Bluetooth Printer',
+      headerStyle: { backgroundColor: t.card },
+      headerTintColor: t.text,
+      headerShown: true,
+    });
+  }, [navigation, t.text, t.card]);
 
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
+  const connectionAttempt = useRef(0);
+
+  const handleCancel = async (deviceId?: string) => {
+    connectionAttempt.current++;
+    setConnectingId(null);
+    setError('Connection request cancelled');
+
+    // Attempt to forcefully disconnect if we have a device ID
+    if (deviceId) {
+      try {
+        const device = devices.find(d => d.id === deviceId);
+        if (device) {
+          await device.disconnect();
+        }
+      } catch (e) {
+        console.log('Force disconnect failed:', e);
+      }
+    }
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -73,19 +111,40 @@ export default function BluetoothScreen() {
   };
 
   const connectToDevice = async (device: BluetoothDevice) => {
+    const currentAttemptId = ++connectionAttempt.current;
     try {
       setConnectingId(device.id);
-      const connected = await device.connect();
+      setError(null);
+
+      // Use a timeout to avoid long hangs when device is off
+      const connectPromise = device.connect();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timed out. Make sure the printer is on.')), 15000)
+      );
+
+      const connected = await Promise.race([connectPromise, timeoutPromise]) as boolean;
+
+      if (currentAttemptId !== connectionAttempt.current) return;
+
       if (connected) {
         setConnectedDevice(device);
         setError(null);
       } else {
         setError('Could not connect to the selected printer');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Connection failed');
+    } catch (err: any) {
+      if (currentAttemptId !== connectionAttempt.current) return;
+
+      const msg = err?.message || String(err);
+      if (msg.toLowerCase().includes('already attempting')) {
+        setError('A connection attempt is already in progress. Please wait a moment or try clicking Cancel first.');
+      } else {
+        setError(msg);
+      }
     } finally {
-      setConnectingId(null);
+      if (currentAttemptId === connectionAttempt.current) {
+        setConnectingId(null);
+      }
     }
   };
 
@@ -95,13 +154,7 @@ export default function BluetoothScreen() {
     <SafeAreaView style={[s.root, { backgroundColor: t.bg }]}>
       <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-      {/* Page header */}
-      <View style={s.header}>
-        <Text style={[s.pageTitle, { color: t.text }]}>Bluetooth Printer</Text>
-        <Text style={[s.pageSubtitle, { color: t.subtext }]}>
-          Select a paired printer to connect
-        </Text>
-      </View>
+      {/* Connected status banner */}
 
       {/* Connected status banner */}
       {connectedDevice && (
@@ -121,6 +174,19 @@ export default function BluetoothScreen() {
         <View style={[s.errorBanner, { backgroundColor: t.dangerBg, borderColor: t.danger }]}>
           <Icon name="error-outline" size={18} color={t.danger} />
           <Text style={[s.errorText, { color: t.danger }]}>{error}</Text>
+        </View>
+      )}
+
+      {/* Connecting status banner */}
+      {connectingId && (
+        <View style={[s.connectingBanner, { backgroundColor: t.accentSoft, borderColor: t.accent }]}>
+          <ActivityIndicator size="small" color={t.accent} />
+          <Text style={[s.connectingText, { color: t.accent, flex: 1, marginLeft: 10 }]} numberOfLines={1}>
+            Connecting to {devices.find(d => d.id === connectingId)?.name || 'Printer'}...
+          </Text>
+          <TouchableOpacity onPress={() => handleCancel(connectingId)} style={[s.cancelBtnSmall, { borderColor: t.danger + '30' }]}>
+            <Text style={[s.cancelBtnTextSmall, { color: t.danger }]}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -236,6 +302,18 @@ const s = StyleSheet.create({
     borderRadius: 14, borderWidth: 1, padding: 14,
   },
   errorText: { fontSize: 13, flex: 1 },
+
+  connectingBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 14, marginBottom: 8,
+    borderRadius: 14, borderWidth: 1, padding: 12,
+  },
+  connectingText: { fontSize: 13, fontWeight: '600' },
+  cancelBtnSmall: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8, borderWidth: 1,
+  },
+  cancelBtnTextSmall: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
 
   scanBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

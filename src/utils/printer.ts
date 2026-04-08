@@ -10,10 +10,10 @@ type OrderItem = {
 
 // Cafe information constants
 const CAFE_INFO = {
-  name: 'Nellai Thati Bellam Coffee',
-  address: 'Nagari Road Puttur-AP',
-  phone: '8019999973',
-  gst: '37HDXPM9792N1ZU'
+  name: 'Jr Tech',
+  address: 'Thiruvallur-TN',
+  phone: '9600332679',
+  gst: '37XXXXXXXXXN1ZU'
 };
 
 /**
@@ -184,6 +184,36 @@ export const printReceipt = async (
   } catch (error) {
     console.error('Printing failed:', error);
     throw new Error(`Printing failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+/**
+ * Get the battery level of the currently connected printer
+ */
+export const getBatteryLevel = async (): Promise<string | null> => {
+  try {
+    const printer = await getConnectedPrinter();
+    if (!printer) return null;
+
+    // TSC/TSPL battery command is usually ~!B or ~!A
+    // Zebra ZPL is ! U1 getvar "power.status"
+    const cmd = printer.name?.includes('TSC') ? '~!B' : '! U1 getvar "power.status"';
+    await BluetoothSerial.writeToDevice(printer.address, cmd);
+
+    // Brief delay to allow printer to respond
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const response = await BluetoothSerial.readFromDevice(printer.address);
+    if (response && response.length > 0) {
+      const batteryMatch = response.match(/(\d+)%/);
+      if (batteryMatch) return batteryMatch[1] + '%';
+      if (response.toLowerCase().includes('full')) return '100%';
+      return response.substring(0, 10).trim();
+    }
+    return null;
+  } catch (error) {
+    console.warn('Error getting battery level:', error);
+    return null;
   }
 };
 
