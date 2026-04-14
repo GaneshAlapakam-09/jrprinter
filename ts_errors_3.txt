@@ -1,0 +1,5 @@
+__tests__/App.test.tsx(9,1): error TS2593: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha` and then add 'jest' or 'mocha' to the types field in your tsconfig.
+screens/BluetoothScreen.tsx(16,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+screens/LoginScreen.tsx(18,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+screens/OrderScreen.tsx(17,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+src/screens/Billing/ListOrderScreen.tsx(11,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.

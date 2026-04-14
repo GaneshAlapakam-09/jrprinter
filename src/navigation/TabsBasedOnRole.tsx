@@ -7,12 +7,12 @@ import Icon from 'react-native-vector-icons/MaterialIcons'; // ✅ import vector
 import { RootStackParamList } from '../navigation/types';
 import { RootTabParamList } from '../types/RootTabParamList';
 
-import DashboardScreen from '../screens/DashboardScreen';
-import AddProductScreen from '../screens/AddProductScreen';
-import ListProductScreen from '../screens/ListProductScreen';
-import OrderScreen from '../screens/OrderScreen';
-import ListOrderScreen from '../screens/ListOrderScreen';
-import BluetoothScreen from '../screens/BluetoothScreen';
+import DashboardScreen from '../screens/Dashboard/DashboardScreen';
+import AddProductScreen from '../screens/Inventory/AddProductScreen';
+import ListProductScreen from '../screens/Inventory/ListProductScreen';
+import OrderScreen from '../screens/Billing/OrderScreen';
+import ListOrderScreen from '../screens/Billing/ListOrderScreen';
+import BluetoothScreen from '../screens/Settings/BluetoothScreen';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 

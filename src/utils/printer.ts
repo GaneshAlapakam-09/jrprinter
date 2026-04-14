@@ -131,7 +131,14 @@ const centerText = (text: string, lineLength: number = 32): string => {
 export const printReceipt = async (
   orderItems: OrderItem[],
   total: number,
-  paymentMode: string
+  paymentMode: string,
+  options: Partial<{
+    tax: number;
+    discount: number;
+    customerName: string;
+    cashierName: string;
+    payments: { mode: string; amount: number }[];
+  }> = {}
 ): Promise<void> => {
   try {
     const printer = await getConnectedPrinter();
@@ -155,6 +162,16 @@ export const printReceipt = async (
     receipt += '     *** ORDER RECEIPT ***\n\n';
     receipt += '\x1B\x21\x00'; // Normal text
 
+    if (options.customerName) {
+      receipt += `Customer: ${options.customerName}\n`;
+    }
+    if (options.cashierName) {
+      receipt += `Cashier: ${options.cashierName}\n`;
+    }
+    if (options.customerName || options.cashierName) {
+      receipt += '\n';
+    }
+
     receipt += '-------------------------------\n';
     receipt += 'Item              Qty     Total\n';
     receipt += '-------------------------------\n';
@@ -166,14 +183,38 @@ export const printReceipt = async (
 
     receipt += '-------------------------------\n';
 
+    if (options.tax) {
+       receipt += `Tax Included                      ${options.tax.toFixed(2).padStart(8)}\n`;
+    }
+    if (options.discount) {
+       receipt += `Discount                          ${options.discount.toFixed(2).padStart(8)}\n`;
+    }
+
     // Total
-    const totalLabel = `TOTAL (${paymentMode})`;
+    const totalLabel = `GRAND TOTAL`;
     const totalAmount = `Rs.${total.toFixed(2)}`;
     const totalSpaces = 32 - totalLabel.length - totalAmount.length;
 
     receipt += '\x1B\x21\x08'; // Emphasized on
     receipt += totalLabel + ' '.repeat(Math.max(1, totalSpaces)) + totalAmount + '\n';
     receipt += '\x1B\x21\x00'; // Emphasized off
+
+    if (options.payments && options.payments.length > 0) {
+      receipt += '-------------------------------\n';
+      receipt += 'PAYMENT BREAKDOWN:\n';
+      options.payments.forEach(p => {
+        const mode = String(p.mode).toUpperCase();
+        const amt = `Rs.${p.amount.toFixed(2)}`;
+        const sp = 32 - mode.length - amt.length;
+        receipt += mode + ' '.repeat(Math.max(1, sp)) + amt + '\n';
+      });
+    } else {
+      receipt += '-------------------------------\n';
+      const pMode = String(paymentMode).toUpperCase();
+      const amt = `Rs.${total.toFixed(2)}`;
+      const sp = 32 - pMode.length - amt.length;
+      receipt += pMode + ' '.repeat(Math.max(1, sp)) + amt + '\n';
+    }
 
     // Footer
     receipt += '-------------------------------\n';

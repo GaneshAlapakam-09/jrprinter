@@ -1,0 +1,21 @@
+__tests__/App.test.tsx(9,1): error TS2593: Cannot find name 'test'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha` and then add 'jest' or 'mocha' to the types field in your tsconfig.
+screens/BluetoothScreen.tsx(16,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+screens/LoginScreen.tsx(18,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+screens/OrderScreen.tsx(17,10): error TS2614: Module '"../App"' has no exported member 'RootStackParamList'. Did you mean to use 'import RootStackParamList from "../App"' instead?
+src/screens/Auth/LoginScreen.tsx(15,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Auth/LoginScreen.tsx(19,41): error TS2307: Cannot find module '../navigation/AppNavigator' or its corresponding type declarations.
+src/screens/Billing/ListOrderScreen.tsx(11,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Billing/OrderScreen.tsx(24,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Billing/OrderScreen.tsx(25,83): error TS2307: Cannot find module '../utils/printer' or its corresponding type declarations.
+src/screens/Billing/OrderScreen.tsx(423,62): error TS7006: Parameter 'err' implicitly has an 'any' type.
+src/screens/Dashboard/DashboardScreen.tsx(90,26): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Inventory/AddProductScreen.tsx(7,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Inventory/AddProductScreen.tsx(10,41): error TS2307: Cannot find module '../navigation/AppNavigator' or its corresponding type declarations.
+src/screens/Inventory/ListProductScreen.tsx(20,36): error TS2307: Cannot find module '../types/MainStackParamList' or its corresponding type declarations.
+src/screens/Inventory/ListProductScreen.tsx(21,17): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Inventory/StockInwardScreen.tsx(42,26): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Labels/AddLabelProductScreen.tsx(16,37): error TS2307: Cannot find module '../navigation/DrawerNavigator' or its corresponding type declarations.
+src/screens/Labels/AddLabelProductScreen.tsx(20,42): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Labels/ListLabelProductScreen.tsx(27,37): error TS2307: Cannot find module '../navigation/DrawerNavigator' or its corresponding type declarations.
+src/screens/Labels/ListLabelProductScreen.tsx(31,42): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
+src/screens/Labels/SetLabelScreen.tsx(26,26): error TS2307: Cannot find module '../api/axios' or its corresponding type declarations.
